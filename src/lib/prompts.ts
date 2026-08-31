@@ -56,13 +56,13 @@ export function buildPatientPrompt(engineCase: EngineCase, alreadyRevealed: stri
  */
 export function buildFeedbackPrompt(
   engineCase: EngineCase,
-  scores: DomainScore[],
+  scores: ScoreSummary[],
   timeline: string[],
 ) {
   const placar = scores
     .map(
       (s) =>
-        `${s.label}: ${s.score}/100 | atingidos: ${s.met.map((m) => m.criterion.label).join("; ") || "nenhum"} | não atingidos: ${s.missed.map((m) => m.criterion.label).join("; ") || "nenhum"}`,
+        `${s.label}: ${s.score}/100 | atingidos: ${s.met.join("; ") || "nenhum"} | não atingidos: ${s.missed.join("; ") || "nenhum"}`,
     )
     .join("\n");
 
