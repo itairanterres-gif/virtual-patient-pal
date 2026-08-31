@@ -1,4 +1,12 @@
-import type { EngineCase, ClinicalFact, DomainScore } from "./engine";
+import type { EngineCase, ClinicalFact } from "./engine";
+
+export type ScoreSummary = {
+  domain: string;
+  label: string;
+  score: number;
+  met: string[];
+  missed: string[];
+};
 
 export type Turn = { role: "student" | "patient"; content: string };
 

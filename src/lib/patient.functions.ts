@@ -3,7 +3,6 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
 import { getEngineCase } from "./engine-registry";
-import { scoreSession, type ClinicalEvent, type DomainScore } from "./engine";
 import { buildFeedbackPrompt, buildPatientPrompt } from "./prompts";
 
 const TurnSchema = z.object({
@@ -18,30 +17,18 @@ const AskSchema = z.object({
   revealedFactIds: z.array(z.string()).max(200).default([]),
 });
 
-const EventSchema = z.object({
-  id: z.string(),
-  atSec: z.number(),
-  clock: z.string(),
-  kind: z.enum([
-    "pergunta",
-    "resposta",
-    "exame_fisico",
-    "exame_solicitado",
-    "resultado",
-    "hipotese",
-    "conduta",
-    "estado",
-  ]),
+const ScoreSchema = z.object({
+  domain: z.string(),
   label: z.string(),
-  detail: z.string().optional(),
-  refId: z.string().optional(),
-  status: z.enum(["normal", "warn", "crit"]),
+  score: z.number(),
+  met: z.array(z.string()),
+  missed: z.array(z.string()),
 });
 
-const EvaluateSchema = z.object({
+const FeedbackSchema = z.object({
   caseId: z.string(),
-  events: z.array(EventSchema).max(400),
-  studentQuestions: z.array(z.string()).max(200),
+  scores: z.array(ScoreSchema).max(20),
+  timeline: z.array(z.string()).max(400),
 });
 
 export const askPatient = createServerFn({ method: "POST" })
@@ -83,36 +70,24 @@ export const askPatient = createServerFn({ method: "POST" })
     };
   });
 
-export type SessionFeedback = {
-  scores: DomainScore[];
-  comentarios: Record<string, string>;
-  resumo: string;
-  melhorias: string[];
-};
-
-export const evaluateSession = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => EvaluateSchema.parse(input))
+/**
+ * A IA só escreve a devolutiva narrativa: as notas chegam prontas do motor
+ * determinístico (calculadas a partir do event log da sessão).
+ */
+export const narrateFeedback = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => FeedbackSchema.parse(input))
   .handler(async ({ data }) => {
     const engineCase = getEngineCase(data.caseId);
     if (!engineCase) throw new Error("Caso não encontrado.");
 
-    // Notas 100% determinísticas — derivadas do event log, nunca do LLM.
-    const scores = scoreSession(engineCase, {
-      events: data.events as ClinicalEvent[],
-      studentQuestions: data.studentQuestions,
-    });
-
-    const timeline = data.events.map((e) => `${e.clock} · ${e.kind}: ${e.label}${e.detail ? ` — ${e.detail}` : ""}`);
+    const empty = {
+      comentarios: {} as Record<string, string>,
+      resumo: "Devolutiva narrativa indisponível; o placar objetivo do simulador permanece válido.",
+      melhorias: [] as string[],
+    };
 
     const apiKey = process.env["LOVABLE_API_KEY"];
-    if (!apiKey) {
-      return {
-        scores,
-        comentarios: {},
-        resumo: "Devolutiva narrativa indisponível; placar objetivo calculado pelo simulador.",
-        melhorias: [],
-      } satisfies SessionFeedback;
-    }
+    if (!apiKey) return empty;
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     try {
@@ -130,11 +105,10 @@ export const evaluateSession = createServerFn({ method: "POST" })
             melhorias: z.array(z.string()),
           }),
         }),
-        prompt: buildFeedbackPrompt(engineCase, scores, timeline),
+        prompt: buildFeedbackPrompt(engineCase, data.scores, data.timeline),
       });
       const out = await result.output;
       return {
-        scores,
         comentarios: {
           rapport: out.rapport,
           anamnese: out.anamnese,
@@ -142,16 +116,11 @@ export const evaluateSession = createServerFn({ method: "POST" })
           diagnostico: out.diagnostico,
           conduta: out.conduta,
           seguranca: out.seguranca,
-        },
+        } as Record<string, string>,
         resumo: out.resumo,
         melhorias: out.melhorias,
-      } satisfies SessionFeedback;
+      };
     } catch {
-      return {
-        scores,
-        comentarios: {},
-        resumo: "Não foi possível gerar a devolutiva narrativa; o placar objetivo permanece válido.",
-        melhorias: [],
-      } satisfies SessionFeedback;
+      return empty;
     }
   });
