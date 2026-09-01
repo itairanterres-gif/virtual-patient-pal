@@ -87,7 +87,7 @@ export const narrateFeedback = createServerFn({ method: "POST" })
     };
 
     const apiKey = process.env["LOVABLE_API_KEY"];
-    if (!apiKey) return empty;
+    if (!apiKey) { console.error("narrate: sem apiKey"); return empty; }
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     try {
