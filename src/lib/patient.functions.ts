@@ -120,7 +120,8 @@ export const narrateFeedback = createServerFn({ method: "POST" })
         resumo: out.resumo,
         melhorias: out.melhorias,
       };
-    } catch {
+    } catch (e) {
+      console.error("narrateFeedback falhou", e);
       return empty;
     }
   });
