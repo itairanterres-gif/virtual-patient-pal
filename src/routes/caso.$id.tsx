@@ -98,7 +98,7 @@ function Cockpit() {
     if (due.length === 0) return;
     setQueue((q) => q.filter((item) => item.dueAtSec > elapsed));
     for (const item of due) {
-      const facts = item.factIds.map((id) => factById[id]).filter(Boolean);
+      const facts = item.factIds.flatMap((id) => { const f = factById[id]; return f ? [f] : []; });
       setRevealedFacts((r) => [...r, ...item.factIds.filter((id) => !r.includes(id))]);
       for (const f of facts) {
         pushEvent(
@@ -539,7 +539,7 @@ function Painel({
         {engineCase.physicalExams.map((p) => {
           const done = events.some((e) => e.kind === "exame_fisico" && e.refId === p.id);
           const waiting = queue.some((q) => q.refId === p.id);
-          const found = p.reveals.map((id) => factById[id]).filter(Boolean);
+          const found = p.reveals.flatMap((id) => { const f = factById[id]; return f ? [f] : []; });
           const shown = p.reveals.some((id) => revealedFacts.includes(id));
           return (
             <button
@@ -575,7 +575,7 @@ function Painel({
       {engineCase.tests.map((t) => {
         const ordered = events.some((e) => e.kind === "exame_solicitado" && e.refId === t.id);
         const waiting = queue.some((q) => q.refId === t.id);
-        const facts = t.reveals.map((id) => factById[id]).filter(Boolean);
+        const facts = t.reveals.flatMap((id) => { const f = factById[id]; return f ? [f] : []; });
         const ready = t.reveals.some((id) => revealedFacts.includes(id));
         return (
           <button
