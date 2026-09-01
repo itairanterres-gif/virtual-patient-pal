@@ -87,7 +87,7 @@ export const narrateFeedback = createServerFn({ method: "POST" })
     };
 
     const apiKey = process.env["LOVABLE_API_KEY"];
-    if (!apiKey) { console.error("narrate: sem apiKey"); return empty; }
+    if (!apiKey) return empty;
 
     const gateway = createLovableAiGatewayProvider(apiKey);
     try {
@@ -120,8 +120,7 @@ export const narrateFeedback = createServerFn({ method: "POST" })
         resumo: out.resumo,
         melhorias: out.melhorias,
       };
-    } catch (e) {
-      console.error("narrateFeedback falhou", e);
+    } catch {
       return empty;
     }
   });
