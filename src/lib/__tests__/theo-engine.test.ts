@@ -3,21 +3,31 @@ import {
   advanceTo,
   applyAction,
   buildDebrief,
+  chaveDoExame,
   createTheoState,
+  exigeRaciocinioAntes,
   missingFields,
   parseIntent,
   type TheoAction,
   type TheoState,
 } from "../theo-engine";
-import { MAX_FATOS_CITADOS, validateActorReply, type ActorValidation } from "../theo-actors";
-
-/** Estreita a união discriminada e falha com mensagem útil se a fala passou. */
-function bloqueada(v: ActorValidation) {
-  if (v.ok) throw new Error(`esperava bloqueio, mas a fala foi aceita: "${v.reply}"`);
-  return v;
-}
+import {
+  buildActorPrompt,
+  catalogoDe,
+  emitirFala,
+  MAX_VERBALIZACOES,
+  verbalizacaoId,
+} from "../theo-actors";
 import { getEngineCase } from "../engine-registry";
-import { maeFacts, THEO_CASE_ID } from "../case-theo";
+import {
+  forbiddenActorTerms,
+  maeFacts,
+  theoGating,
+  recusaPadrao,
+  THEO_CASE_ID,
+  theoFacts,
+  verbalizacoesDe,
+} from "../case-theo";
 
 const run = (actions: TheoAction[], finalSec?: number): TheoState => {
   let s = createTheoState();
@@ -49,101 +59,161 @@ function completeOxygen(atSec = 10): TheoAction[] {
   ];
 }
 
-describe("vazamento de informação pelos atores", () => {
-  it("Théo não revela dado objetivo mesmo com IDs válidos", () => {
-    const v = validateActorReply("theo", "Minha saturação está em 89% e tenho sibilância.", [
-      "t-peito",
-    ]);
-    expect(v.ok).toBe(false);
-    expect(v.reply).toMatch(/não responde|Théo/);
+describe("emissão controlada: nenhuma prosa do modelo chega ao estudante", () => {
+  const sel = (id: string, factId = id.split("#")[0]!) => ({ factId, verbalizacaoId: id });
+
+  it("entrega exatamente o texto da verbalização escolhida", () => {
+    const fato = maeFacts.find((f) => f.id === "m-crises-anteriores")!;
+    const e = emitirFala("mae", [sel(verbalizacaoId(fato.id, 0))], "ele já teve crises antes?");
+    expect(e.ok).toBe(true);
+    expect(e.reply).toBe(fato.content);
+    expect(e.factIds).toEqual(["m-crises-anteriores"]);
+    expect(e.verbalizacaoIds).toEqual(["m-crises-anteriores#0"]);
   });
 
-  it("rejeita texto com número inventado apesar de IDs válidos", () => {
-    const v = validateActorReply("theo", "Eu respiro 45 vezes por minuto.", ["t-cansaco-fala"]);
-    expect(v.ok).toBe(false);
+  it("combina verbalizações inteiras, sem recombinar palavras", () => {
+    const a = verbalizacoesDe(theoFacts.find((f) => f.id === "t-peito")!)[0]!;
+    const b = verbalizacoesDe(theoFacts.find((f) => f.id === "t-tosse")!)[0]!;
+    const e = emitirFala("theo", [sel("t-peito#0"), sel("t-tosse#0")], "o que você sente?");
+    expect(e.ok).toBe(true);
+    expect(e.reply).toBe(`${a} ${b}`);
   });
 
-  it("rejeita afirmação de consequência futura", () => {
-    const v = validateActorReply("mae", "Ele vai precisar ser internado hoje.", ["m-preocupacao"]);
-    expect(v.ok).toBe(false);
+  it("rejeita verbalização inexistente e devolve fallback determinístico", () => {
+    const e = emitirFala("mae", [sel("m-inicio#99")], "quando começou?");
+    expect(e.ok).toBe(false);
+    expect(e.reason).toContain("inexistente");
+    expect(e.reply).toContain("não sei responder");
+    expect(e.factIds).toEqual([]);
   });
 
-  it("rejeita ID de outro ator", () => {
-    const v = validateActorReply("theo", "Ele já teve outras crises.", ["m-crises-anteriores"]);
-    expect(v.ok).toBe(false);
+  it("rejeita verbalização de outro ator", () => {
+    const e = emitirFala("theo", [sel("m-inicio#0")], "quando começou?");
+    expect(e.ok).toBe(false);
+    expect(e.reason).toContain("outro ator");
   });
 
-  it("a mãe pode informar crises anteriores", () => {
-    const fact = maeFacts.find((f) => f.id === "m-crises-anteriores")!;
-    const v = validateActorReply("mae", fact.content, ["m-crises-anteriores"]);
-    expect(v.ok).toBe(true);
-    expect(v.factIds).toEqual(["m-crises-anteriores"]);
-  });
-});
-
-describe("grounding: a fala precisa decorrer dos fatos citados", () => {
-  it("rejeita fala clínica com factIds vazio", () => {
-    const v = validateActorReply("mae", "Meu pai morreu ontem.", []);
-    expect(v.ok).toBe(false);
-    expect(bloqueada(v).reason).toContain("fala clínica sem fato citado");
-    expect(v.factIds).toEqual([]);
+  it("rejeita factId incoerente com a verbalização escolhida", () => {
+    const e = emitirFala(
+      "mae",
+      [{ factId: "m-peso", verbalizacaoId: "m-inicio#0" }],
+      "quando começou?",
+    );
+    expect(e.ok).toBe(false);
+    expect(e.reason).toContain("incoerente");
   });
 
-  it("aceita recusa curta com factIds vazio", () => {
-    for (const recusa of ["Não sei.", "Não lembro disso, tio.", "Isso nunca aconteceu."]) {
-      const v = validateActorReply("theo", recusa, []);
-      expect(v.ok).toBe(true);
-      expect(v.factIds).toEqual([]);
+  it("rejeita mais verbalizações que o limite por fala", () => {
+    const ids = maeFacts.slice(0, MAX_VERBALIZACOES + 1).map((f) => sel(verbalizacaoId(f.id, 0)));
+    const e = emitirFala("mae", ids, "conte tudo");
+    expect(e.ok).toBe(false);
+    expect(e.reason).toContain(`mais de ${MAX_VERBALIZACOES}`);
+  });
+
+  it("seleção vazia devolve a recusa padrão do catálogo, não invenção", () => {
+    const e = emitirFala("theo", [], "você já viajou para o exterior?");
+    expect(e.ok).toBe(true);
+    expect(e.reply).toBe(recusaPadrao.theo);
+    expect(e.factIds).toEqual([]);
+  });
+
+  it("texto que o modelo tente enviar por fora é ignorado — não há canal para prosa", () => {
+    const comProsa = [
+      { factId: "m-sem-febre", verbalizacaoId: "m-sem-febre#0", reply: "Teve febre de 39 graus." },
+    ] as never;
+    const e = emitirFala("mae", comProsa, "ele teve febre?");
+    expect(e.ok).toBe(true);
+    expect(e.reply).toBe(maeFacts.find((f) => f.id === "m-sem-febre")!.content);
+    expect(e.reply).not.toMatch(/39/);
+  });
+
+  // As duas inversões que a validação lexical anterior não pegava: todas as
+  // palavras de "Teve febre" e "Ele ficou internado" existem nos fatos que
+  // NEGAM esses eventos. Aqui a inversão é impossível por construção, porque
+  // só sai do servidor texto de catálogo — e o catálogo só tem a negação.
+  it("inversão “Teve febre” é inalcançável: toda verbalização do fato nega a febre", () => {
+    const fato = maeFacts.find((f) => f.id === "m-sem-febre")!;
+    const textos = verbalizacoesDe(fato);
+    expect(textos.length).toBeGreaterThan(1);
+    for (const [i, texto] of textos.entries()) {
+      expect(texto.toLowerCase()).toMatch(/não teve|nao teve|não tem|estava normal/);
+      const e = emitirFala("mae", [sel(verbalizacaoId(fato.id, i))], "ele teve febre?");
+      expect(e.reply).toBe(texto);
+      expect(e.reply.toLowerCase()).not.toMatch(/^teve febre/);
     }
   });
 
-  it("rejeita texto inventado apesar de o ID citado ser válido", () => {
-    const v = validateActorReply("theo", "Eu tossi sangue à noite.", ["t-tosse"]);
-    expect(v.ok).toBe(false);
-    expect(bloqueada(v).reason).toContain("sangue");
+  it("inversão “Ele ficou internado” é inalcançável: toda verbalização do fato nega a internação", () => {
+    const fato = maeFacts.find((f) => f.id === "m-internacao")!;
+    const textos = verbalizacoesDe(fato);
+    expect(textos.length).toBeGreaterThan(1);
+    for (const [i, texto] of textos.entries()) {
+      expect(texto.toLowerCase()).toMatch(/nunca|não |nao /);
+      const e = emitirFala("mae", [sel(verbalizacaoId(fato.id, i))], "ele já internou?");
+      expect(e.reply).toBe(texto);
+      expect(e.reply.toLowerCase()).not.toMatch(/^ele ficou internado/);
+    }
   });
 
-  it("rejeita número que pertence a outro fato do mesmo ator", () => {
-    // "22" existe no corpus da mãe (m-peso), mas não no fato citado.
-    const peso = maeFacts.find((f) => f.id === "m-peso")!;
-    expect(peso.content).toContain("22");
-    const v = validateActorReply("mae", "Ele já teve 22 crises parecidas.", [
-      "m-crises-anteriores",
-    ]);
-    expect(v.ok).toBe(false);
-    expect(bloqueada(v).reason).toContain("número não sustentado pelos fatos citados");
-    // contraprova: o mesmo número passa quando citado com o fato que o sustenta
-    expect(validateActorReply("mae", peso.content, ["m-peso"]).ok).toBe(true);
+  it("o catálogo inteiro está limpo de termo objetivo proibido", () => {
+    const norm = (x: string) =>
+      x
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    for (const actor of ["theo", "mae"] as const) {
+      for (const entrada of catalogoDe(actor)) {
+        // "salbutamol" isolado é palavra da mãe ("a bombinha de salbutamol");
+        // o termo proibido é a forma técnica "salbutamol inalatório".
+        const proibido = forbiddenActorTerms.find((t) => norm(entrada.texto).includes(norm(t)));
+        expect(proibido, `${entrada.id}: "${entrada.texto}"`).toBeUndefined();
+      }
+    }
+  });
+});
+
+describe("fatos sensíveis exigem pergunta direta compatível", () => {
+  const sel = (id: string) => ({ factId: id.split("#")[0]!, verbalizacaoId: id });
+
+  it("medo da máscara não sai sem pergunta compatível", () => {
+    const e = emitirFala("theo", [sel("t-medo-mascara#0")], "o que você sente no peito?");
+    expect(e.ok).toBe(false);
+    expect(e.reason).toContain("fato sensível sem pergunta direta compatível");
   });
 
-  it("rejeita fato citado sem uso na fala (corpus-padding)", () => {
-    const v = validateActorReply("mae", "As vacinas estão em dia.", ["m-vacinas", "m-peso"]);
-    expect(v.ok).toBe(false);
-    expect(bloqueada(v).reason).toContain("m-peso");
+  it("medo da máscara sai quando a pergunta alcança o medo", () => {
+    const e = emitirFala("theo", [sel("t-medo-mascara#0")], "você tem medo de alguma coisa aqui?");
+    expect(e.ok).toBe(true);
+    expect(e.reply).toContain("máscara");
   });
 
-  it("rejeita citar mais fatos que o limite por fala", () => {
-    const ids = maeFacts.slice(0, MAX_FATOS_CITADOS + 1).map((f) => f.id);
-    const v = validateActorReply("mae", "Começou com coriza há três dias.", ids);
-    expect(v.ok).toBe(false);
-    expect(bloqueada(v).reason).toContain(`mais de ${MAX_FATOS_CITADOS}`);
-  });
-
-  it("rejeita atribuir ao paciente a asma que é da mãe, mesmo com palavras autorizadas", () => {
-    const v = validateActorReply("mae", "Ele tem asma.", ["m-asma-materna"]);
-    expect(v.ok).toBe(false);
-    // a mãe segue podendo falar da própria asma
-    expect(validateActorReply("mae", "Quem tem asma sou eu, a mãe.", ["m-asma-materna"]).ok).toBe(
+  it("culpa e preocupação da mãe também dependem de pergunta compatível", () => {
+    expect(emitirFala("mae", [sel("m-culpa#0")], "quando começou o chiado?").ok).toBe(false);
+    expect(emitirFala("mae", [sel("m-culpa#0")], "a senhora se sente culpada?").ok).toBe(true);
+    expect(emitirFala("mae", [sel("m-preocupacao#0")], "ele tomou vacina?").ok).toBe(false);
+    expect(emitirFala("mae", [sel("m-preocupacao#0")], "como a senhora está se sentindo?").ok).toBe(
       true,
     );
   });
 
-  it("aceita paráfrase montada com as verbalizações autorizadas do fato citado", () => {
-    const v = validateActorReply("theo", "Cansa falar, tenho que parar no meio para respirar.", [
-      "t-cansaco-fala",
-    ]);
-    expect(v.ok).toBe(true);
-    expect(v.factIds).toEqual(["t-cansaco-fala"]);
+  it("fato não sensível não depende de pergunta", () => {
+    expect(emitirFala("mae", [sel("m-vacinas#0")], "qualquer coisa").ok).toBe(true);
+  });
+
+  it("o fato sensível não é nem enviado ao modelo sem pergunta compatível", () => {
+    const semGatilho = buildActorPrompt("theo", "o que você sente no peito?");
+    expect(semGatilho).not.toContain("t-medo-agulha");
+    expect(semGatilho).toContain("t-peito");
+
+    const comGatilho = buildActorPrompt("theo", "você tem medo de agulha?");
+    expect(comGatilho).toContain("t-medo-agulha");
+  });
+
+  it("o prompt pede ids e nunca texto livre", () => {
+    const prompt = buildActorPrompt("mae", "quando começou?");
+    expect(prompt).toContain("Você NÃO escreve a resposta");
+    expect(prompt).toContain("verbalizacaoId");
+    expect(prompt).toContain("social:mae:nao-sei");
   });
 });
 
@@ -418,7 +488,7 @@ describe("transferência exige destino e passagem substantiva", () => {
     const recusa = s.log.find(
       (e) => e.label === "Transferência não concluída — passagem de caso insuficiente",
     );
-    expect(recusa?.detail).toContain("passagem clínica substantiva");
+    expect(recusa?.detail).toContain("passagem de caso preenchida");
   });
 
   it("não encerra com passagem curta demais", () => {
@@ -475,16 +545,35 @@ describe("transferência exige destino e passagem substantiva", () => {
   });
 });
 
-describe("raciocínio declarado antes do exame complementar", () => {
-  it("bloqueia exame complementar enquanto o raciocínio não for declarado", () => {
+describe("exame decisivo é configuração do caso, não regra geral", () => {
+  it("no caso do Théo nenhum exame é decisivo, então nada é bloqueado", () => {
+    expect(theoGating.examesDecisivos).toEqual([]);
     const s = run([{ type: "ordem", atSec: 60, raw: "solicitar radiografia de tórax" }]);
-    expect(s.orders).toHaveLength(0);
-    const bloqueio = s.log.find(
-      (e) => e.label === "Exame complementar bloqueado — raciocínio não declarado",
-    );
-    expect(bloqueio?.tone).toBe("warn");
+    expect(s.orders).toHaveLength(1);
+    expect(s.log.some((e) => /bloqueado/.test(e.label))).toBe(false);
   });
 
+  it("a chave do exame é reconhecida no texto da solicitação", () => {
+    expect(chaveDoExame({}, "solicitar radiografia de tórax")).toBe("radiografia");
+    expect(chaveDoExame({}, "colher gasometria arterial")).toBe("gasometria");
+    expect(chaveDoExame({}, "pedir hemograma")).toBe("hemograma");
+    expect(chaveDoExame({}, "auscultar o tórax")).toBe("radiografia"); // "torax" casa a regex
+    expect(chaveDoExame({}, "medir o peso")).toBeNull();
+    expect(chaveDoExame({ test: "gasometria" }, "aquele exame")).toBe("gasometria");
+  });
+
+  it("o gate só exige raciocínio para o exame que o caso declara decisivo", () => {
+    const raw = "solicitar radiografia de tórax";
+    expect(exigeRaciocinioAntes({}, raw, { examesDecisivos: [] })).toBe(false);
+    expect(exigeRaciocinioAntes({}, raw, { examesDecisivos: ["gasometria"] })).toBe(false);
+    expect(exigeRaciocinioAntes({}, raw, { examesDecisivos: ["radiografia"] })).toBe(true);
+    expect(exigeRaciocinioAntes({}, "medir o peso", { examesDecisivos: ["radiografia"] })).toBe(
+      false,
+    );
+  });
+});
+
+describe("raciocínio declarado", () => {
   it("não bloqueia intervenção terapêutica — o compromisso é antes do dado, não do tratamento", () => {
     const s = run([
       { type: "ordem", atSec: 60, raw: "ofertar oxigênio por cateter nasal a 3 L/min, alvo 94%" },
@@ -533,11 +622,26 @@ describe("raciocínio declarado antes do exame complementar", () => {
     expect(JSON.stringify(d)).not.toMatch(/"score"|"nota"/);
   });
 
-  it("sem raciocínio o item fica não observado e explica a consequência", () => {
+  it("sem raciocínio o item fica não observado e não finge que algo foi bloqueado", () => {
     const item = buildDebrief(run([{ type: "monitor", atSec: 10 }])).itens.find(
       (i) => i.id === "raciocinio-declarado",
     )!;
     expect(item.status).toBe("nao_observado");
-    expect(item.consequencia).toContain("exige o raciocínio declarado antes");
+    expect(item.consequencia).toContain("não declara exame decisivo");
+  });
+
+  it("o debrief não trata comprimento da passagem como qualidade", () => {
+    const s = run([
+      {
+        type: "transferir",
+        atSec: 60,
+        destino: "Dra. Helena, pediatra plantonista",
+        passagem: PASSAGEM_VALIDA,
+      },
+    ]);
+    const d = buildDebrief(s);
+    const item = d.itens.find((i) => i.id === "transferencia")!;
+    expect(item.titulo).toBe("Destino e passagem registrados");
+    expect(d.naoAvaliavel.some((x) => /qualidade da passagem/i.test(x))).toBe(true);
   });
 });

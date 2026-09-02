@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { patientAvatars } from "@/lib/avatars";
-import { theoObjectiveFacts, theoProvenance } from "@/lib/case-theo";
+import { theoGating, theoObjectiveFacts, theoProvenance } from "@/lib/case-theo";
 import { askTheoActor } from "@/lib/theo.functions";
 import { teamReply } from "@/lib/theo-actors";
 import {
@@ -368,9 +368,13 @@ export function TheoStation() {
                       declarado {clockLabel(state.reasoning[state.reasoning.length - 1]!.atSec)} ·{" "}
                       {CONFIANCA_LABEL[state.reasoning[state.reasoning.length - 1]!.confianca]}
                     </span>
-                  ) : (
+                  ) : theoGating.examesDecisivos.length > 0 ? (
                     <span className="font-mono text-[10px] text-warn">
-                      exigido antes de solicitar exame complementar
+                      exigido antes do exame decisivo deste caso
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[10px] text-faint">
+                      não declarado — este caso não exige antes de exame
                     </span>
                   )}
                   <button

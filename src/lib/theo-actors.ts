@@ -1,34 +1,29 @@
 /**
- * Escopo de fatos por ator e validação de grounding.
+ * Emissão controlada da fala dos atores.
  *
- * A proteção NÃO depende do prompt e NÃO é uma lista de proibições: a fala do
- * ator só é aceita se **decorrer dos fatos que ela própria citou**.
+ * O modelo NÃO escreve para o estudante. Ele apenas **escolhe** entre
+ * verbalizações autorizadas: devolve `factId` + `verbalizacaoId`, e o servidor
+ * monta a resposta exclusivamente com o texto completo dessas verbalizações.
+ * Fala social e recusa também vêm de catálogo fixo (`falasSociais`).
  *
- * Contrato de uma fala válida:
- * 1. `factIds` referencia apenas fatos existentes do próprio ator;
- * 2. no máximo `MAX_FATOS_CITADOS` fatos por fala, e cada fato citado tem de ser
- *    de fato usado (corpus-padding é rejeitado);
- * 3. toda palavra de conteúdo da fala aparece nas verbalizações autorizadas dos
- *    fatos citados — o restante só pode ser função gramatical ou fórmula social;
- * 4. todo número da fala aparece nas verbalizações dos fatos CITADOS (não no
- *    corpus inteiro do ator);
- * 5. `factIds` vazio só é aceito se a fala for puramente social ou uma recusa
- *    ("não sei", "não lembro") — nunca para conteúdo clínico;
- * 6. termos objetivos proibidos e afirmações não sustentadas seguem barrados.
+ * Por que isto substituiu a validação lexical: a validação anterior conferia
+ * palavra por palavra contra os fatos citados, o que limitava vocabulário e
+ * não semântica. O fato "Nunca precisou ficar internado" autoriza todas as
+ * palavras de "Ele ficou internado" — a negação simplesmente desaparecia. Não
+ * é possível enumerar as inversões clínicas com regex, e tentar isso foi o
+ * erro do desenho anterior. Aqui a inversão não é detectada: ela é impossível,
+ * porque nenhuma prosa clínica do modelo chega ao estudante.
  *
- * Qualquer violação descarta a resposta inteira e o motor usa a fala de
- * fallback determinística.
- *
- * Limite conhecido e deliberado: esta validação limita o VOCABULÁRIO ao dos
- * fatos citados, o que não é o mesmo que garantir semântica. Inversões de
- * sentido montadas com palavras autorizadas (por exemplo atribuir ao Théo a
- * asma que é da mãe) não são detectáveis por derivação lexical e continuam
- * cobertas por padrão explícito em `forbiddenClaimPatterns`.
+ * Custo aceito: menos variedade de fala. Ganho: o que se afirma garantir é o
+ * que o código garante, e o pediatra revisa exatamente as 2 a 3 verbalizações
+ * de cada fato.
  */
 
 import {
-  forbiddenActorTerms,
+  falasSociais,
+  gatilhosSensiveis,
   maeFacts,
+  recusaPadrao,
   theoFacts,
   verbalizacoesDe,
   type ActorFact,
@@ -36,8 +31,8 @@ import {
 
 export type SpeakingActor = "theo" | "mae";
 
-/** Uma fala tem no máximo 3 frases; citar mais que isso é alargar corpus. */
-export const MAX_FATOS_CITADOS = 3;
+/** Uma fala tem no máximo 3 frases; mais que isso não é fala de paciente. */
+export const MAX_VERBALIZACOES = 3;
 
 export function factsForActor(actor: SpeakingActor): ActorFact[] {
   return actor === "theo" ? theoFacts : maeFacts;
@@ -49,161 +44,145 @@ const norm = (s: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-const tokens = (s: string) =>
-  norm(s)
-    .replace(/[^a-z0-9]+/g, " ")
-    .split(" ")
-    .filter(Boolean);
+/** Id estável de verbalização: `<factId>#<índice>`, índice 0 = `content`. */
+export function verbalizacaoId(factId: string, indice: number) {
+  return `${factId}#${indice}`;
+}
 
-/**
- * Palavras de função: não carregam informação clínica e por isso são livres.
- * Lista FECHADA — nada de conteúdo entra aqui. Toda palavra clinicamente
- * significativa tem de vir dos fatos citados.
- */
-const STOPWORDS = new Set(
-  tokens(`a o as os um uma uns umas de do da dos das em no na nos nas num numa ao aos
-   para pra por pelo pela pelos pelas com sem sobre entre ate desde apos depois antes
-   e ou mas que se como quando onde porque pois entao tambem ja ainda so apenas
-   muito pouco pouquinho mais menos bem tao meio quase todo toda todos todas
-   eu me mim meu minha meus minhas comigo ele ela dele dela lhe nos nosso nossa
-   voce vc te tu teu tua seu sua isso isto aquilo esse essa este esta aquele aquela
-   aqui ali la ai agora hoje sim nao nada nenhum nenhuma outro outra
-   disso disto daquilo nisso nesse nessa deste desta dele dela assim
-   e sao esta estao estou estava estamos ser sou foi era eram sendo
-   ter tem tenho tinha teve temos havia ha
-   vai vou vamos ir fica ficou ficar fico faz fez fazer
-   dar deu dei da poder pode posso queria`),
-);
+type Entrada = { id: string; texto: string; factId: string | null; sensitive: boolean };
 
-/**
- * Fórmulas sociais e de recusa: o único conteúdo que um ator pode produzir sem
- * citar fato algum. Fala clínica sem fato citado é rejeitada.
- */
-const SOCIAL_LEXICON = new Set(
-  tokens(`oi ola bom boa dia tarde noite tchau obrigado obrigada desculpa desculpe
-   por favor ta tudo certo doutor doutora doutorzinho tio tia moco moca senhor senhora
-   sei lembro lembra recordo conta contar disse falar falei perguntar pergunta responder
-   acho parece talvez nunca aconteceu sabe entendi entendo ajuda ajudar
-   mae mamae filho menino crianca nome anos idade`),
-);
+/** Catálogo completo de emissão de um ator: verbalizações de fato + falas sociais. */
+export function catalogoDe(actor: SpeakingActor): Entrada[] {
+  const deFatos = factsForActor(actor).flatMap((f) =>
+    verbalizacoesDe(f).map((texto, i) => ({
+      id: verbalizacaoId(f.id, i),
+      texto,
+      factId: f.id,
+      sensitive: f.sensitive === true,
+    })),
+  );
+  const sociais = falasSociais[actor].map((s) => ({
+    id: s.id,
+    texto: s.texto,
+    factId: null,
+    sensitive: false,
+  }));
+  return [...deFatos, ...sociais];
+}
 
-/** Afirmações que o ator não pode fazer, mesmo montadas com palavras autorizadas. */
-const forbiddenClaimPatterns = [
-  /vai (piorar|parar|precisar|melhorar)/,
-  /pode (morrer|parar de respirar|intubar)/,
-  /precisa (de|ser) (internad|intubad|uti)/,
-  /o exame (mostrou|deu)/,
-  /o resultado (foi|deu)/,
-  /est(a|á) com \d+/,
-  // A asma é da mãe: atribuí-la ao paciente é inversão de sentido, não paráfrase.
-  /\b(ele|theo|meu filho|o menino|o guri) (tem|teve|esta com|ficou com|e) asma\b/,
-];
+/** A pergunta do estudante alcança este fato sensível de forma direta? */
+export function perguntaLiberaFato(factId: string, pergunta: string): boolean {
+  const gatilhos = gatilhosSensiveis[factId];
+  if (!gatilhos) return true; // fato não sensível: sem porta
+  const p = norm(pergunta);
+  return gatilhos.some((g) => p.includes(norm(g)));
+}
 
-export type ActorValidation =
-  | { ok: true; reply: string; factIds: string[] }
-  | { ok: false; reason: string; reply: string; factIds: string[] };
+/** Fatos que podem ser enviados ao modelo nesta pergunta. */
+export function fatosLiberados(actor: SpeakingActor, pergunta: string): ActorFact[] {
+  return factsForActor(actor).filter(
+    (f) => f.sensitive !== true || perguntaLiberaFato(f.id, pergunta),
+  );
+}
+
+export type SelecaoBruta = { factId?: unknown; verbalizacaoId?: unknown };
+
+export type Emissao = {
+  ok: boolean;
+  reply: string;
+  factIds: string[];
+  verbalizacaoIds: string[];
+  reason?: string;
+};
 
 const FALLBACK: Record<SpeakingActor, string> = {
   theo: "Théo olha para você, respira com dificuldade e não responde nada além disso.",
   mae: "A mãe hesita: “Desculpa, isso eu não sei responder.”",
 };
 
-/** Palavras de conteúdo de um texto: nem função gramatical, nem fórmula social. */
-function conteudo(texto: string): string[] {
-  return tokens(texto).filter((t) => !STOPWORDS.has(t) && !SOCIAL_LEXICON.has(t));
+/**
+ * Monta a fala do ator a partir das seleções do modelo.
+ *
+ * Só sai daqui texto que já estava autorizado no catálogo. Qualquer seleção
+ * inválida — id inexistente, id de outro ator, `factId` incoerente com a
+ * verbalização, fato sensível sem pergunta compatível, excesso de seleções —
+ * descarta a fala inteira e devolve o fallback determinístico.
+ */
+export function emitirFala(
+  actor: SpeakingActor,
+  selecoes: SelecaoBruta[] | undefined,
+  pergunta: string,
+): Emissao {
+  const catalogo = catalogoDe(actor);
+  const porId = new Map(catalogo.map((e) => [e.id, e]));
+  const falha = (reason: string): Emissao => ({
+    ok: false,
+    reply: FALLBACK[actor],
+    factIds: [],
+    verbalizacaoIds: [],
+    reason,
+  });
+
+  const lista = Array.isArray(selecoes) ? selecoes : [];
+
+  // Nada selecionado não é violação: é o ator não tendo o que dizer.
+  if (lista.length === 0)
+    return { ok: true, reply: recusaPadrao[actor], factIds: [], verbalizacaoIds: [] };
+
+  if (lista.length > MAX_VERBALIZACOES)
+    return falha(`mais de ${MAX_VERBALIZACOES} verbalizações em uma única fala`);
+
+  const escolhidas: Entrada[] = [];
+  for (const sel of lista) {
+    const vid = typeof sel?.verbalizacaoId === "string" ? sel.verbalizacaoId : "";
+    const entrada = porId.get(vid);
+    if (!entrada) return falha(`verbalização inexistente ou de outro ator: "${vid}"`);
+
+    const fid = typeof sel?.factId === "string" ? sel.factId : null;
+    if (fid !== null && fid !== "" && fid !== entrada.factId)
+      return falha(`factId "${fid}" incoerente com a verbalização "${vid}"`);
+
+    if (entrada.sensitive && entrada.factId && !perguntaLiberaFato(entrada.factId, pergunta))
+      return falha(`fato sensível sem pergunta direta compatível: ${entrada.factId}`);
+
+    if (!escolhidas.some((e) => e.id === entrada.id)) escolhidas.push(entrada);
+  }
+
+  return {
+    ok: true,
+    reply: escolhidas.map((e) => e.texto).join(" "),
+    factIds: [...new Set(escolhidas.flatMap((e) => (e.factId ? [e.factId] : [])))],
+    verbalizacaoIds: escolhidas.map((e) => e.id),
+  };
 }
 
 /**
- * Valida a fala do ator contra os fatos que ela citou. Ver o contrato no topo
- * do arquivo. Falha fecha: qualquer violação devolve a fala de fallback.
+ * Prompt do ator: recebe SOMENTE os fatos liberados para esta pergunta e pede
+ * ids, nunca texto. O modelo é um selecionador, não um redator.
  */
-export function validateActorReply(
-  actor: SpeakingActor,
-  rawReply: string,
-  rawIds: string[],
-): ActorValidation {
-  const allowed = factsForActor(actor);
-  const byId = new Map(allowed.map((f) => [f.id, f]));
-  const reply = (rawReply ?? "").trim();
-  const fail = (reason: string): ActorValidation => ({
-    ok: false,
-    reason,
-    reply: FALLBACK[actor],
-    factIds: [],
-  });
-
-  if (!reply) return fail("resposta vazia");
-
-  const ids = [...new Set(rawIds ?? [])];
-  if (ids.some((id) => !byId.has(id))) return fail("ID de fato inexistente ou de outro ator");
-  if (ids.length > MAX_FATOS_CITADOS)
-    return fail(`mais de ${MAX_FATOS_CITADOS} fatos citados em uma única fala`);
-
-  const t = norm(reply);
-  const termo = forbiddenActorTerms.find((term) => t.includes(norm(term)));
-  if (termo) return fail(`termo proibido para o ator: "${termo}"`);
-  if (forbiddenClaimPatterns.some((re) => re.test(t)))
-    return fail("afirmação clínica não sustentada pelos fatos autorizados");
-
-  const conteudoDaFala = conteudo(reply);
-  const numerosDaFala = tokens(reply).filter((x) => /^\d+$/.test(x));
-
-  // Fala sem fato citado: só social ou recusa. Nada clínico.
-  if (ids.length === 0) {
-    if (conteudoDaFala.length > 0 || numerosDaFala.length > 0)
-      return fail(`fala clínica sem fato citado: "${conteudoDaFala[0] ?? numerosDaFala[0]}"`);
-    return { ok: true, reply, factIds: [] };
-  }
-
-  // Corpus autorizado = verbalizações dos fatos EFETIVAMENTE CITADOS.
-  const citados = ids.map((id) => byId.get(id)!);
-  const corpus = new Set(citados.flatMap((f) => verbalizacoesDe(f).flatMap(tokens)));
-
-  const numeroForaDoCorpus = numerosDaFala.find((n) => !corpus.has(n));
-  if (numeroForaDoCorpus)
-    return fail(`número não sustentado pelos fatos citados: ${numeroForaDoCorpus}`);
-
-  const palavraForaDoCorpus = conteudoDaFala.find((w) => !corpus.has(w));
-  if (palavraForaDoCorpus)
-    return fail(`conteúdo não sustentado pelos fatos citados: "${palavraForaDoCorpus}"`);
-
-  // Cada fato citado precisa ter sido usado — citar sem usar é alargar corpus.
-  const naFala = new Set(conteudoDaFala);
-  const naoUsado = citados.find((f) => {
-    const proprias = new Set(verbalizacoesDe(f).flatMap(conteudo));
-    if (proprias.size === 0) return false;
-    return ![...proprias].some((w) => naFala.has(w));
-  });
-  if (naoUsado) return fail(`fato citado sem uso na fala: ${naoUsado.id}`);
-
-  return { ok: true, reply, factIds: ids };
-}
-
-/** Prompt do ator: recebe SOMENTE os fatos que ele pode conhecer. */
-export function buildActorPrompt(actor: SpeakingActor): string {
-  const facts = factsForActor(actor);
+export function buildActorPrompt(actor: SpeakingActor, pergunta: string): string {
+  const facts = fatosLiberados(actor, pergunta);
   const persona =
     actor === "theo"
-      ? "Você é Théo, uma criança de 6 anos com falta de ar, no pronto-socorro. Fala com frases curtas, vocabulário infantil, precisa parar para respirar. Você NÃO sabe nada sobre exames, aparelhos, números ou nomes de doenças."
-      : "Você é a mãe do Théo, 34 anos, preocupada. Você conhece a história do filho, o que aconteceu em casa e as crises anteriores. Você NÃO sabe resultados de exames, valores de aparelhos, achados de ausculta nem o nome técnico do que ele tem.";
+      ? "Você é Théo, uma criança de 6 anos com falta de ar, no pronto-socorro. Você NÃO sabe nada sobre exames, aparelhos, números ou nomes de doenças."
+      : "Você é a mãe do Théo, 34 anos, preocupada. Você conhece a história do filho e as crises anteriores. Você NÃO sabe resultados de exames, valores de aparelhos, achados de ausculta nem o nome técnico do que ele tem.";
+
+  const opcoes = facts.flatMap((f) =>
+    verbalizacoesDe(f).map((v, i) => `- ${verbalizacaoId(f.id, i)} (${f.label}): "${v}"`),
+  );
+  const sociais = falasSociais[actor].map((s) => `- ${s.id}: "${s.texto}"`);
 
   return [
     persona,
-    "Responda SEMPRE em português do Brasil, em primeira pessoa, com no máximo 3 frases.",
-    "Cada fato abaixo traz as VERBALIZAÇÕES AUTORIZADAS dele. Sua fala precisa ser montada com as palavras dessas verbalizações: você pode escolher uma, encurtá-la ou reordenar as palavras, mas NÃO pode introduzir palavra de conteúdo que não esteja lá.",
-    `Cite em "factIds" os ids dos fatos que você usou — no máximo ${MAX_FATOS_CITADOS}, e apenas os que realmente aparecem na sua fala.`,
-    'Se a pergunta não corresponder a nenhum fato, responda apenas com uma recusa curta ("não sei", "não lembro", "isso nunca aconteceu") e devolva "factIds" vazio. Uma fala com conteúdo clínico e factIds vazio é descartada.',
-    "Nunca mencione saturação, frequências, ausculta, exames, aparelhos, medicamentos por nome técnico, diagnósticos ou o que vai acontecer depois.",
+    "Você NÃO escreve a resposta. Você SELECIONA, entre as falas autorizadas abaixo, aquela ou aquelas que respondem à pergunta do estudante. O sistema é que entrega o texto.",
+    `Devolva de 1 a ${MAX_VERBALIZACOES} seleções, em JSON, no campo "selecoes": cada item com "factId" (o id do fato, ou string vazia para fala social) e "verbalizacaoId" (o id exato da linha escolhida).`,
+    "Se nenhuma fala autorizada responde à pergunta, selecione uma das falas sociais de recusa. Nunca invente texto: texto inventado é descartado e não chega ao estudante.",
     "",
-    "FATOS AUTORIZADOS:",
-    ...facts.map(
-      (f) =>
-        `- [${f.id}] ${f.label}\n${verbalizacoesDe(f)
-          .map((v) => `    · ${v}`)
-          .join("\n")}`,
-    ),
+    "FALAS AUTORIZADAS (fatos):",
+    ...opcoes,
     "",
-    'Devolva JSON com "reply" (sua fala) e "factIds" (os ids dos fatos usados; lista vazia se não usou nenhum).',
+    "FALAS AUTORIZADAS (social e recusa):",
+    ...sociais,
   ].join("\n");
 }
 

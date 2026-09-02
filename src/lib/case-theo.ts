@@ -357,6 +357,78 @@ export const verbalizacoesAutorizadas: Record<string, string[]> = {
   ],
 };
 
+/**
+ * Liberação de fatos sensíveis: só saem se o estudante perguntar de forma
+ * direta e compatível. Validado NO SERVIDOR, não no prompt — e o fato nem é
+ * enviado ao modelo enquanto não estiver liberado.
+ *
+ * Medo, culpa e preocupação são vivência, não dado clínico a colher: o
+ * simulador não deve entregá-los a quem não perguntou.
+ */
+export const gatilhosSensiveis: Record<string, string[]> = {
+  "t-medo-mascara": [
+    "medo",
+    "mascara",
+    "assust",
+    "incomod",
+    "nao gosta",
+    "aceita",
+    "colocar no rosto",
+    "tem vergonha",
+  ],
+  "t-medo-agulha": ["medo", "agulha", "injec", "picada", "furar", "espetar", "sangue no braco"],
+  "m-preocupacao": [
+    "preocup",
+    "medo",
+    "assust",
+    "como voce esta",
+    "como a senhora esta",
+    "o que a senhora sente",
+    "esta se sentindo",
+    "angusti",
+    "nervos",
+  ],
+  "m-culpa": [
+    "culpa",
+    "demor",
+    "antes",
+    "tarde",
+    "se cobra",
+    "acha que",
+    "responsavel",
+    "poderia ter",
+  ],
+};
+
+/**
+ * Catálogo fixo de fala social e de recusa. Nenhuma prosa social vem do
+ * modelo: ele escolhe um id daqui, como escolhe uma verbalização de fato.
+ */
+export const falasSociais: Record<Exclude<TheoActor, "equipe">, { id: string; texto: string }[]> = {
+  theo: [
+    { id: "social:theo:nao-sei", texto: "Não sei." },
+    { id: "social:theo:nao-lembro", texto: "Não lembro." },
+    { id: "social:theo:nunca", texto: "Isso nunca aconteceu." },
+    { id: "social:theo:oi", texto: "Oi." },
+    { id: "social:theo:silencio", texto: "Théo olha para você e não responde." },
+    { id: "social:theo:nao-quero-falar", texto: "Não quero falar disso agora." },
+  ],
+  mae: [
+    { id: "social:mae:nao-sei", texto: "Isso eu não sei responder." },
+    { id: "social:mae:nao-lembro", texto: "Não lembro direito, doutor." },
+    { id: "social:mae:nunca", texto: "Isso nunca aconteceu." },
+    { id: "social:mae:boa-tarde", texto: "Boa tarde, doutor." },
+    { id: "social:mae:obrigada", texto: "Obrigada." },
+    { id: "social:mae:prefiro-nao", texto: "Prefiro não falar disso agora." },
+  ],
+};
+
+/** Recusa padrão de cada ator, usada quando o modelo não seleciona nada. */
+export const recusaPadrao: Record<Exclude<TheoActor, "equipe">, string> = {
+  theo: "Não sei.",
+  mae: "Isso eu não sei responder.",
+};
+
 /** Todas as verbalizações autorizadas de um fato, incluindo o `content` canônico. */
 export function verbalizacoesDe(fact: ActorFact): string[] {
   return [fact.content, ...(verbalizacoesAutorizadas[fact.id] ?? [])];
@@ -533,6 +605,22 @@ export const theoLatency = {
   examDuration: 15,
   testTurnaround: 240,
 } as const;
+
+/**
+ * Compromisso diagnóstico antes do dado — CONFIGURAÇÃO DESTE CASO, não regra
+ * do motor.
+ *
+ * A decisão pedagógica é "compromisso antes do exame DECISIVO". Presumir que
+ * todo exame complementar seja decisivo criaria regra artificial justamente
+ * aqui: a crise do Théo se avalia clinicamente, e radiografia, gasometria e
+ * hemograma não decidem o diagnóstico dele. Por isso a lista está vazia — a
+ * capacidade existe, fica desligada neste caso, e cada caso futuro declara os
+ * seus exames decisivos por chave de `TEST_MAP` (radiografia, gasometria,
+ * hemograma).
+ */
+export const theoGating = {
+  examesDecisivos: [] as string[],
+};
 
 /** 1 segundo real = 5 segundos de tempo clínico. */
 export const THEO_CLOCK_FACTOR = 5;

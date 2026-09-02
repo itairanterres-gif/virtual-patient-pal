@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
-import { buildActorPrompt, validateActorReply, type SpeakingActor } from "./theo-actors";
+import { buildActorPrompt, emitirFala, type SpeakingActor } from "./theo-actors";
 
 const AskTheoSchema = z.object({
   actor: z.enum(["theo", "mae"]),
@@ -14,10 +14,12 @@ const AskTheoSchema = z.object({
 });
 
 /**
- * O modelo é APENAS a voz de Théo ou da mãe.
- * Recebe somente os fatos daquele ator; a resposta é validada em conteúdo e IDs
- * antes de voltar ao motor. Nenhum dado objetivo, diagnóstico ou consequência
- * futura é enviado ao modelo.
+ * O modelo apenas SELECIONA falas autorizadas; o servidor monta o texto.
+ *
+ * Não há campo de texto livre na saída do modelo: não existe caminho pelo qual
+ * prosa clínica gerada por ele alcance o estudante. Fatos sensíveis não são
+ * nem enviados no prompt sem pergunta direta compatível, e a liberação é
+ * revalidada aqui na emissão.
  */
 export const askTheoActor = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => AskTheoSchema.parse(input))
@@ -31,9 +33,11 @@ export const askTheoActor = createServerFn({ method: "POST" })
       const result = await generateText({
         model: gateway("google/gemini-3.7-flash"),
         output: Output.object({
-          schema: z.object({ reply: z.string(), factIds: z.array(z.string()) }),
+          schema: z.object({
+            selecoes: z.array(z.object({ factId: z.string(), verbalizacaoId: z.string() })),
+          }),
         }),
-        system: buildActorPrompt(actor),
+        system: buildActorPrompt(actor, data.question),
         messages: [
           ...data.transcript.map((t) => ({
             role: (t.role === "student" ? "user" : "assistant") as "user" | "assistant",
@@ -41,22 +45,24 @@ export const askTheoActor = createServerFn({ method: "POST" })
           })),
           { role: "user" as const, content: data.question },
         ],
-        temperature: 0.6,
+        temperature: 0.2,
       });
 
       const out = await result.output;
-      const check = validateActorReply(actor, out?.reply ?? "", out?.factIds ?? []);
+      const emissao = emitirFala(actor, out?.selecoes, data.question);
       return {
-        reply: check.reply,
-        factIds: check.factIds,
-        grounded: check.ok,
-        blockedReason: check.ok ? null : check.reason,
+        reply: emissao.reply,
+        factIds: emissao.factIds,
+        verbalizacaoIds: emissao.verbalizacaoIds,
+        grounded: emissao.ok,
+        blockedReason: emissao.reason ?? null,
       };
     } catch {
-      const check = validateActorReply(actor, "", []);
+      const emissao = emitirFala(actor, [{ verbalizacaoId: "inexistente" }], data.question);
       return {
-        reply: check.reply,
+        reply: emissao.reply,
         factIds: [],
+        verbalizacaoIds: [],
         grounded: false,
         blockedReason: "falha de comunicação com o modelo",
       };
