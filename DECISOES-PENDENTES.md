@@ -1,26 +1,37 @@
-# Decisões pedagógicas pendentes — piloto do Théo
+# Decisões pedagógicas — piloto do Théo
 
-Decisões que o código **tomou provisoriamente** e que aguardam ratificação. Cada entrada diz o que
-está implementado hoje, por que está assim e o que falta para fechar.
+Decisões que o código tomou e o estado de ratificação de cada uma. Cada entrada diz o que está
+implementado hoje, por que está assim e, se ainda estiver aberta, o que falta para fechar.
 
-## 1. Escala de confiança do estudante — PENDENTE
+## 1. Escala de confiança do estudante — DECIDIDA (02/09/2026)
 
-**Implementado hoje:** `Confianca = "baixa" | "media" | "alta"` (`src/lib/theo-engine.ts`), com três
-botões na estação.
+**Decisão:** mantém-se `baixa | media | alta`, em **um único compromisso clínico por encontro**. O
+debrief não avalia automaticamente a calibração dessa confiança, e o dado **não** é tratado como
+equivalente à confiança em questão objetiva.
 
-**Por que assim:** escolhi ordinal para não sugerir precisão de calibração que o motor não mede.
+**Implementado:** `Confianca = "baixa" | "media" | "alta"` (`src/lib/theo-engine.ts`), com três botões
+na estação e registro no event log com horário.
 
-**Por que é pendente:** a decisão acordada é coletar a confiança **de forma comparável à confiança das
-questões do Treino ENAMED** — autorrelato para calcular calibração depois, o que não é nota e não
-afirma correção. Escala ordinal de três níveis provavelmente não é a mesma escala usada lá, e
-converter depois perde informação.
+**Por que fechou assim:** a decisão anterior era alinhar à escala de confiança das questões do Treino
+ENAMED. Auditoria somente leitura daquele repositório mostrou que **não existe escala viva para
+alinhar**:
 
-**O que falta:** confirmar a escala usada no Treino ENAMED (`itairanterres-gif/Treino-enamed`) e
-alinhar esta a ela. Até então **não mudar** — trocar de escala duas vezes invalida qualquer dado já
-coletado no piloto.
+- a coleta de confiança foi **removida da tela por atrito** (commit `a6af91b`, 02/08/2026: "removidos
+  o seletor de confiança e a alternativa 'Não tenho certeza' — decisão do coordenador: pouca função,
+  atrito alto");
+- `src/Training.tsx` grava `confidence: 2` **fixo**, então toda linha de `attempts` tem o mesmo valor;
+- não há uso analítico: a métrica `high_confidence_errors` foi substituída por `erros_rapidos`
+  (migração `20260809200000`), que deriva o sinal do tempo de resposta e **não pergunta nada ao aluno**;
+- a única escala que existiu lá era exatamente Baixa/Média/Alta — a mesma que este piloto já usa.
 
-**Onde mexer quando decidir:** o tipo `Confianca` e `CONFIANCA_LABEL` em `src/lib/theo-engine.ts`, o
-seletor em `src/components/theo-station.tsx`, e a evidência do item `raciocinio-declarado` no debrief.
+Além disso o construto difere: confiança numa escolha de múltipla escolha é calibrável contra
+gabarito; confiança numa representação do problema em texto livre não tem gabarito contra o qual
+calibrar sem leitura humana. Mesma palavra, aritmética diferente.
+
+**Se o ecossistema voltar a coletar confiança declarada** e escolher escala numérica, a mudança é de
+ecossistema (os dois apps), não deste piloto. Onde mexer, nesse caso: o tipo `Confianca` e
+`CONFIANCA_LABEL` em `src/lib/theo-engine.ts`, o seletor em `src/components/theo-station.tsx`, e a
+evidência do item `raciocinio-declarado` no debrief.
 
 ## 2. Exames decisivos deste caso — configurado como vazio
 

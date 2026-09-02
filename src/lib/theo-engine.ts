@@ -139,12 +139,13 @@ export type Order = {
 };
 
 /**
- * DECISÃO PEDAGÓGICA PENDENTE — ver DECISOES-PENDENTES.md, item 1.
+ * DECISÃO PEDAGÓGICA FECHADA em 02/09/2026 — ver DECISOES-PENDENTES.md, item 1.
  *
- * Ordinal de três níveis é provisório. A decisão acordada é coletar a confiança
- * de forma comparável à do Treino ENAMED (autorrelato para calcular calibração
- * depois — não é nota e não afirma correção). Não trocar antes de confirmar a
- * escala de lá: mudar duas vezes invalida o que o piloto já tiver coletado.
+ * Ordinal de três níveis, num único compromisso clínico por encontro. Auditoria
+ * do Treino ENAMED mostrou que não há escala viva para alinhar: a coleta foi
+ * removida de lá por atrito e o campo é gravado como constante, sem uso
+ * analítico. Este dado não equivale à confiança em questão objetiva, e o
+ * debrief não avalia a calibração dele.
  */
 export type Confianca = "baixa" | "media" | "alta";
 
