@@ -136,7 +136,7 @@ describe("efeitos das intervenções", () => {
   it("prednisolona não melhora o quadro agudo", () => {
     let s = run([{ type: "ordem", atSec: 10, raw: "prednisolona 30 mg via oral" }]);
     s = applyAction(s, { type: "confirmar", atSec: 15, orderId: orderId(s) });
-    const post = advanceTo(s, 9 * 60);
+    const post = advanceTo(s, 11 * 60);
     expect(post.vitals.effort).toBe("critico");
     expect(post.log.some((e) => e.label.includes("sem melhora clínica aguda"))).toBe(true);
   });

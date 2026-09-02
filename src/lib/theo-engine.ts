@@ -436,7 +436,12 @@ export function parseIntent(raw: string): Intent {
   if (!t) return mk("desconhecido");
   if (/transferir|transferencia|passar o caso|passagem de caso|encaminhar|acionar pediatra|chamar pediatra|entregar o cuidado/.test(t))
     return mk("transferir");
-  if (/oximetr|saturacao|spo2|sat do|checar o monitor|ver o monitor|monitor/.test(t) && !/instalar monitor|monitorizacao|monitorizar/.test(t))
+  const actionVerb = /ofert|administr|inici|coloc|instal|prescrev|aplicar|\bdar\b|\bfazer\b|\busar\b|puff|jato|gotas|l\/min/.test(t);
+  if (
+    /oximetr|saturacao|spo2|sat do|checar o monitor|ver o monitor|monitor/.test(t) &&
+    !/instalar monitor|monitorizacao|monitorizar/.test(t) &&
+    !actionVerb
+  )
     return mk("monitor");
   if (/monitorizar|instalar monitor|monitorizacao|colocar monitor/.test(t))
     return mk("ordem", { orderKind: "monitorizacao" });
