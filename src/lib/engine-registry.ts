@@ -1,4 +1,5 @@
 import { joanaCase } from "./case-joana";
+import { THEO_CASE_ID } from "./case-theo";
 import { CASES, type ClinicalCase } from "./cases";
 import {
   asked,
@@ -79,13 +80,55 @@ function adaptCase(c: ClinicalCase): EngineCase {
   }));
 
   const rubric: RubricCriterion[] = [
-    { id: "r-abertura", domain: "rapport", label: "Cumprimentou / apresentou-se", weight: 1, check: (x) => asked(x, "bom dia", "boa tarde", "boa noite", "olá", "meu nome") },
-    { id: "r-aberta", domain: "rapport", label: "Usou pergunta aberta", weight: 1, check: (x) => x.studentQuestions.some((q) => /como|o que|conte|me fale|descreva/i.test(q)) },
-    { id: "a-queixa", domain: "anamnese", label: "Explorou a queixa principal", weight: 2, check: (x) => x.studentQuestions.length >= 3 },
-    { id: "a-antecedentes", domain: "anamnese", label: "Investigou antecedentes/medicações", weight: 1, check: (x) => asked(x, "antecedente", "doença", "medicament", "remédio", "alergia") },
-    { id: "rc-exame", domain: "raciocinio", label: "Realizou exame físico dirigido", weight: 2, check: (x) => x.events.filter((e) => e.kind === "exame_fisico").length >= 2 },
-    { id: "rc-exames", domain: "raciocinio", label: "Solicitou exames complementares pertinentes", weight: 2, check: (x) => x.events.some((e) => e.kind === "exame_solicitado") },
-    { id: "d-hipotese", domain: "diagnostico", label: "Registrou hipótese diagnóstica", weight: 1, check: (x) => x.events.some((e) => e.kind === "hipotese") },
+    {
+      id: "r-abertura",
+      domain: "rapport",
+      label: "Cumprimentou / apresentou-se",
+      weight: 1,
+      check: (x) => asked(x, "bom dia", "boa tarde", "boa noite", "olá", "meu nome"),
+    },
+    {
+      id: "r-aberta",
+      domain: "rapport",
+      label: "Usou pergunta aberta",
+      weight: 1,
+      check: (x) => x.studentQuestions.some((q) => /como|o que|conte|me fale|descreva/i.test(q)),
+    },
+    {
+      id: "a-queixa",
+      domain: "anamnese",
+      label: "Explorou a queixa principal",
+      weight: 2,
+      check: (x) => x.studentQuestions.length >= 3,
+    },
+    {
+      id: "a-antecedentes",
+      domain: "anamnese",
+      label: "Investigou antecedentes/medicações",
+      weight: 1,
+      check: (x) => asked(x, "antecedente", "doença", "medicament", "remédio", "alergia"),
+    },
+    {
+      id: "rc-exame",
+      domain: "raciocinio",
+      label: "Realizou exame físico dirigido",
+      weight: 2,
+      check: (x) => x.events.filter((e) => e.kind === "exame_fisico").length >= 2,
+    },
+    {
+      id: "rc-exames",
+      domain: "raciocinio",
+      label: "Solicitou exames complementares pertinentes",
+      weight: 2,
+      check: (x) => x.events.some((e) => e.kind === "exame_solicitado"),
+    },
+    {
+      id: "d-hipotese",
+      domain: "diagnostico",
+      label: "Registrou hipótese diagnóstica",
+      weight: 1,
+      check: (x) => x.events.some((e) => e.kind === "hipotese"),
+    },
     {
       id: "d-correta",
       domain: "diagnostico",
@@ -102,10 +145,38 @@ function adaptCase(c: ClinicalCase): EngineCase {
               .some((w) => `${e.label} ${e.detail ?? ""}`.toLowerCase().includes(w)),
         ),
     },
-    { id: "c-conduta", domain: "conduta", label: "Iniciou conduta terapêutica", weight: 2, check: (x) => x.events.some((e) => e.kind === "conduta") },
-    { id: "c-primeira", domain: "conduta", label: "Executou a conduta prioritária do caso", weight: 2, check: (x) => didEvent(x, "conduta", `m-${slug(c.managements[0] ?? "")}`) },
-    { id: "s-exame-antes", domain: "seguranca", label: "Examinou o paciente antes de tratar", weight: 2, check: (x) => { const ef = x.events.find((e) => e.kind === "exame_fisico"); const cd = x.events.find((e) => e.kind === "conduta"); return !!ef && (!cd || ef.atSec <= cd.atSec); } },
-    { id: "s-tempo", domain: "seguranca", label: "Conduziu a avaliação sem atraso excessivo", weight: 1, check: (x) => x.events.some((e) => e.kind === "conduta" && e.atSec <= 900) },
+    {
+      id: "c-conduta",
+      domain: "conduta",
+      label: "Iniciou conduta terapêutica",
+      weight: 2,
+      check: (x) => x.events.some((e) => e.kind === "conduta"),
+    },
+    {
+      id: "c-primeira",
+      domain: "conduta",
+      label: "Executou a conduta prioritária do caso",
+      weight: 2,
+      check: (x) => didEvent(x, "conduta", `m-${slug(c.managements[0] ?? "")}`),
+    },
+    {
+      id: "s-exame-antes",
+      domain: "seguranca",
+      label: "Examinou o paciente antes de tratar",
+      weight: 2,
+      check: (x) => {
+        const ef = x.events.find((e) => e.kind === "exame_fisico");
+        const cd = x.events.find((e) => e.kind === "conduta");
+        return !!ef && (!cd || ef.atSec <= cd.atSec);
+      },
+    },
+    {
+      id: "s-tempo",
+      domain: "seguranca",
+      label: "Conduziu a avaliação sem atraso excessivo",
+      weight: 1,
+      check: (x) => x.events.some((e) => e.kind === "conduta" && e.atSec <= 900),
+    },
   ];
 
   return {
@@ -130,7 +201,10 @@ function adaptCase(c: ClinicalCase): EngineCase {
 const registry: Record<string, EngineCase> = {
   [joanaCase.id]: joanaCase,
   ...Object.fromEntries(
-    CASES.filter((c) => c.id !== joanaCase.id).map((c) => [c.id, adaptCase(c)]),
+    CASES.filter((c) => c.id !== joanaCase.id && c.id !== THEO_CASE_ID).map((c) => [
+      c.id,
+      adaptCase(c),
+    ]),
   ),
 };
 
