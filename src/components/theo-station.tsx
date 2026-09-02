@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { patientAvatars } from "@/lib/avatars";
-import { theoObjectiveFacts, theoProvenance } from "@/lib/case-theo";
+import { theoGating, theoObjectiveFacts, theoProvenance } from "@/lib/case-theo";
 import { askTheoActor } from "@/lib/theo.functions";
 import { teamReply } from "@/lib/theo-actors";
 import {
@@ -14,11 +14,15 @@ import {
   createTheoState,
   DEBRIEF_LABEL,
   EFFORT_LABEL,
+  avaliarRaciocinio,
+  avaliarTransferencia,
+  CONFIANCA_LABEL,
   parseIntent,
   SPEECH_LABEL,
   THEO_CLOCK_FACTOR,
   WHEEZE_LABEL,
   type CausalEvent,
+  type Confianca,
   type TheoAction,
   type TheoState,
 } from "@/lib/theo-engine";
@@ -42,6 +46,7 @@ const EVENT_TONE: Record<string, string> = {
   evento_independente: "text-crit",
   comunicacao: "text-faint",
   transferencia: "text-warn",
+  raciocinio: "text-primary",
 };
 
 export function TheoStation() {
@@ -53,6 +58,10 @@ export function TheoStation() {
   const [action, setAction] = useState("");
   const [clarify, setClarify] = useState<Record<string, string>>({});
   const [waiting, setWaiting] = useState(false);
+  const [showRaciocinio, setShowRaciocinio] = useState(false);
+  const [representacao, setRepresentacao] = useState("");
+  const [diferenciais, setDiferenciais] = useState("");
+  const [confianca, setConfianca] = useState<Confianca>("media");
   const [showTransfer, setShowTransfer] = useState(false);
   const [destino, setDestino] = useState("");
   const [passagem, setPassagem] = useState("");
@@ -171,10 +180,33 @@ export function TheoStation() {
     else dispatch({ type: "ordem", atSec: 0, raw, intent });
   }
 
+  // A UI espelha a validação do motor para não oferecer um botão que o motor
+  // vai recusar. O motor continua sendo a autoridade: ele revalida.
+  const faltasTransferencia = avaliarTransferencia(destino, passagem);
+  const listaDiferenciais = diferenciais
+    .split(/[\n;]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const faltasRaciocinio = avaliarRaciocinio(representacao, listaDiferenciais, confianca);
+
   function confirmTransfer() {
-    if (!destino.trim()) return;
+    if (faltasTransferencia.length > 0) return;
     dispatch({ type: "transferir", atSec: 0, destino: destino.trim(), passagem: passagem.trim() });
     setShowTransfer(false);
+  }
+
+  function confirmRaciocinio() {
+    if (faltasRaciocinio.length > 0) return;
+    dispatch({
+      type: "raciocinio",
+      atSec: 0,
+      representacao: representacao.trim(),
+      diferenciais: listaDiferenciais,
+      confianca,
+    });
+    setShowRaciocinio(false);
+    setRepresentacao("");
+    setDiferenciais("");
   }
 
   return (
@@ -323,6 +355,86 @@ export function TheoStation() {
                 >
                   executar
                 </button>
+              </div>
+
+              {/* Compromisso antes do dado: exame complementar exige raciocínio declarado. */}
+              <div className="mt-3 rounded-md bg-raise p-2.5 ring-1 ring-line">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <p className="font-mono text-[10px] tracking-[0.12em] text-faint uppercase">
+                    Raciocínio
+                  </p>
+                  {state.reasoning.length > 0 ? (
+                    <span className="font-mono text-[10px] text-normal">
+                      declarado {clockLabel(state.reasoning[state.reasoning.length - 1]!.atSec)} ·{" "}
+                      {CONFIANCA_LABEL[state.reasoning[state.reasoning.length - 1]!.confianca]}
+                    </span>
+                  ) : theoGating.examesDecisivos.length > 0 ? (
+                    <span className="font-mono text-[10px] text-warn">
+                      exigido antes do exame decisivo deste caso
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[10px] text-faint">
+                      não declarado — este caso não exige antes de exame
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setShowRaciocinio((x) => !x)}
+                    disabled={state.frozen}
+                    className="ml-auto rounded-md bg-card px-2.5 py-1.5 font-mono text-[10px] ring-1 ring-line disabled:opacity-40"
+                  >
+                    {showRaciocinio ? "fechar" : "declarar"}
+                  </button>
+                </div>
+
+                {showRaciocinio && !state.frozen && (
+                  <div className="mt-2.5 space-y-2">
+                    <textarea
+                      value={representacao}
+                      onChange={(e) => setRepresentacao(e.target.value)}
+                      rows={3}
+                      placeholder="Representação do problema: quem é este paciente e qual é o problema, em uma frase…"
+                      className="w-full rounded-md bg-card px-3 py-2 text-[13px] ring-1 ring-line outline-none focus:ring-primary/40"
+                    />
+                    <textarea
+                      value={diferenciais}
+                      onChange={(e) => setDiferenciais(e.target.value)}
+                      rows={3}
+                      placeholder="Diagnósticos diferenciais, um por linha (mínimo dois)…"
+                      className="w-full rounded-md bg-card px-3 py-2 text-[13px] ring-1 ring-line outline-none focus:ring-primary/40"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-[10px] text-faint">confiança</span>
+                      {(["baixa", "media", "alta"] as Confianca[]).map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => setConfianca(c)}
+                          className={`rounded-md px-2.5 py-1.5 font-mono text-[10px] ring-1 ${
+                            confianca === c
+                              ? "bg-primary/25 ring-primary/40"
+                              : "bg-card text-faint ring-line"
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                      <button
+                        onClick={confirmRaciocinio}
+                        disabled={faltasRaciocinio.length > 0}
+                        className="ml-auto rounded-md bg-primary/25 px-3 py-2 font-mono text-[11px] ring-1 ring-primary/40 disabled:opacity-40"
+                      >
+                        registrar
+                      </button>
+                    </div>
+                    {faltasRaciocinio.length > 0 && (
+                      <p className="text-[11px] text-warn">Falta: {faltasRaciocinio.join("; ")}.</p>
+                    )}
+                    <p className="text-[11px] text-faint">
+                      O simulador registra que você declarou isto e quando. Se a representação está
+                      correta, os diferenciais são pertinentes e a confiança está calibrada não é
+                      avaliado automaticamente — é leitura do preceptor.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {openOrders.length > 0 && (
@@ -538,7 +650,8 @@ export function TheoStation() {
             <div className="w-full max-w-md rounded-md bg-card p-4 ring-1 ring-line">
               <p className="mb-2 text-[13px] font-semibold">Transferir o cuidado</p>
               <p className="mb-3 text-[11px] text-faint">
-                Informe o destino ou profissional responsável e registre a passagem de caso.
+                O encontro só encerra com destino e passagem de caso substantiva — ambos ficam
+                registrados no event log.
               </p>
               <input
                 value={destino}
@@ -550,13 +663,18 @@ export function TheoStation() {
                 value={passagem}
                 onChange={(e) => setPassagem(e.target.value)}
                 rows={4}
-                placeholder="Passagem de caso em texto livre…"
-                className="mb-3 w-full rounded-md bg-raise px-3 py-2 text-[13px] ring-1 ring-line outline-none focus:ring-primary/40"
+                placeholder="Passagem de caso: situação, o que foi feito, o que fica pendente…"
+                className="mb-2 w-full rounded-md bg-raise px-3 py-2 text-[13px] ring-1 ring-line outline-none focus:ring-primary/40"
               />
+              {faltasTransferencia.length > 0 && (
+                <p className="mb-3 text-[11px] text-warn">
+                  Falta: {faltasTransferencia.join("; ")}.
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={confirmTransfer}
-                  disabled={!destino.trim()}
+                  disabled={faltasTransferencia.length > 0}
                   className="flex-1 rounded-md bg-primary/25 px-3 py-2 font-mono text-[11px] ring-1 ring-primary/40 disabled:opacity-40"
                 >
                   transferir e encerrar

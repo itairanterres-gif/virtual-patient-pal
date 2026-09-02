@@ -12,6 +12,7 @@
 import {
   THEO_CLOCK_FACTOR,
   theoBaseline,
+  theoGating,
   theoLatency,
   theoObjectiveFacts,
   theoTimeline,
@@ -81,7 +82,8 @@ export type EventType =
   | "efeito"
   | "evento_independente"
   | "comunicacao"
-  | "transferencia";
+  | "transferencia"
+  | "raciocinio";
 
 export type CausalEvent = {
   id: string;
@@ -136,6 +138,57 @@ export type Order = {
   resultFactIds?: string[] | undefined;
 };
 
+/**
+ * DECISÃO PEDAGÓGICA FECHADA em 02/09/2026 — ver DECISOES-PENDENTES.md, item 1.
+ *
+ * Ordinal de três níveis, num único compromisso clínico por encontro. Auditoria
+ * do Treino ENAMED mostrou que não há escala viva para alinhar: a coleta foi
+ * removida de lá por atrito e o campo é gravado como constante, sem uso
+ * analítico. Este dado não equivale à confiança em questão objetiva, e o
+ * debrief não avalia a calibração dele.
+ */
+export type Confianca = "baixa" | "media" | "alta";
+
+export const CONFIANCA_LABEL: Record<Confianca, string> = {
+  baixa: "confiança baixa",
+  media: "confiança média",
+  alta: "confiança alta",
+};
+
+/**
+ * Representação do problema, diferenciais e confiança, declarados ANTES do
+ * exame complementar. O motor registra o que foi expresso e quando; a
+ * qualidade semântica (a representação está correta? os diferenciais são
+ * pertinentes? a confiança está calibrada?) NÃO é avaliada automaticamente.
+ */
+export type ReasoningEntry = {
+  atSec: number;
+  representacao: string;
+  diferenciais: string[];
+  confianca: Confianca;
+};
+
+export const REPRESENTACAO_MIN_CARACTERES = 30;
+export const DIFERENCIAIS_MIN = 2;
+
+export function avaliarRaciocinio(
+  representacao: string,
+  diferenciais: string[],
+  confianca: Confianca,
+): string[] {
+  const faltas: string[] = [];
+  const r = representacao.trim();
+  if (r.length < REPRESENTACAO_MIN_CARACTERES)
+    faltas.push(
+      `representação do problema com pelo menos ${REPRESENTACAO_MIN_CARACTERES} caracteres (há ${r.length})`,
+    );
+  const d = diferenciais.map((x) => x.trim()).filter(Boolean);
+  if (d.length < DIFERENCIAIS_MIN)
+    faltas.push(`ao menos ${DIFERENCIAIS_MIN} diagnósticos diferenciais (há ${d.length})`);
+  if (!["baixa", "media", "alta"].includes(confianca)) faltas.push("grau de confiança");
+  return faltas;
+}
+
 export type TheoState = {
   clockSec: number;
   vitals: Vitals;
@@ -143,6 +196,7 @@ export type TheoState = {
   log: CausalEvent[];
   revealedObjective: string[];
   transfer: { destino: string; passagem: string; atSec: number } | null;
+  reasoning: ReasoningEntry[];
   frozen: boolean;
   safetyEscalation: boolean;
   triggered: string[];
@@ -167,6 +221,7 @@ export function createTheoState(): TheoState {
     ],
     revealedObjective: [],
     transfer: null,
+    reasoning: [],
     frozen: false,
     safetyEscalation: false,
     triggered: [],
@@ -196,6 +251,7 @@ const clone = (s: TheoState): TheoState => ({
   log: [...s.log],
   revealedObjective: [...s.revealedObjective],
   triggered: [...s.triggered],
+  reasoning: s.reasoning.map((r) => ({ ...r, diferenciais: [...r.diferenciais] })),
 });
 
 // ---------------------------------------------------------------- fisiologia
@@ -241,7 +297,9 @@ function latencies(o: Order) {
 /** Avança o relógio clínico segundo a segundo, aplicando ordens, efeitos e eventos independentes. */
 export function advanceTo(state: TheoState, targetSec: number): TheoState {
   if (targetSec <= state.clockSec) return state;
-  if (state.frozen) return { ...state, clockSec: targetSec };
+  // Congelamento absoluto: depois da transferência nem o relógio anda. Deixar
+  // `clockSec` avançar fazia o encontro encerrado seguir contando tempo clínico.
+  if (state.frozen) return state;
   const s = clone(state);
 
   for (let sec = s.clockSec + 1; sec <= targetSec; sec++) {
@@ -472,10 +530,33 @@ function parseFields(raw: string): OrderFields {
 }
 
 const TEST_MAP: { re: RegExp; key: string }[] = [
-  { re: /raio|radiograf|\brx\b|torax|tórax/, key: "radiografia" },
+  // Sem o token solto "torax": ele fazia "auscultar o tórax" — exame FÍSICO —
+  // ser reconhecido como pedido de radiografia. A solicitação explícita é
+  // reconhecida por "raio", "radiograf" ou "rx".
+  { re: /raio|radiograf|\brx\b/, key: "radiografia" },
   { re: /gasometr|gaso/, key: "gasometria" },
   { re: /hemograma|sangue|laborat/, key: "hemograma" },
 ];
+
+/** Chave de exame reconhecida no texto da solicitação, se houver. */
+export function chaveDoExame(fields: OrderFields, raw: string): string | null {
+  if (fields.test) return fields.test;
+  return TEST_MAP.find((m) => m.re.test(norm(raw)))?.key ?? null;
+}
+
+/**
+ * Este exame é decisivo NESTE CASO e por isso exige raciocínio declarado antes?
+ * A resposta vem da configuração do caso — o motor não decide isso sozinho.
+ */
+export function exigeRaciocinioAntes(
+  fields: OrderFields,
+  raw: string,
+  gating: { examesDecisivos: string[] } = theoGating,
+): boolean {
+  const chave = chaveDoExame(fields, raw);
+  if (!chave) return false;
+  return gating.examesDecisivos.includes(chave);
+}
 
 function testFactsFor(raw: string): ObjectiveFact[] {
   const t = norm(raw);
@@ -600,6 +681,35 @@ export function orderLabel(kind: OrderKind, drug?: Drug, fields?: OrderFields) {
 
 // -------------------------------------------------------------------- ações
 
+/**
+ * Passagem de caso: exigência mínima para encerrar o encontro.
+ *
+ * O motor não julga a QUALIDADE clínica do texto — isso é leitura do preceptor,
+ * como todo o resto do raciocínio livre. Ele exige apenas que destino e
+ * passagem existam e estejam preenchidos, para que "transferi o cuidado" deixe
+ * de ser um clique. Comprimento nunca é qualidade.
+ */
+/**
+ * Gate de PREENCHIMENTO, não medida de qualidade. Serve só para impedir campo
+ * vazio ou uma palavra; não demonstra passagem estruturada e não é usado como
+ * evidência de qualidade em lugar nenhum. A qualidade da passagem é leitura do
+ * preceptor — ver `naoAvaliavel` no debrief.
+ */
+export const PASSAGEM_GATE_CARACTERES = 40;
+export const PASSAGEM_GATE_PALAVRAS = 8;
+
+export function avaliarTransferencia(destino: string, passagem: string): string[] {
+  const faltas: string[] = [];
+  if (!destino.trim()) faltas.push("destino ou profissional responsável");
+  const p = passagem.trim();
+  const palavras = p ? p.split(/\s+/).length : 0;
+  if (p.length < PASSAGEM_GATE_CARACTERES || palavras < PASSAGEM_GATE_PALAVRAS)
+    faltas.push(
+      `passagem de caso preenchida (mínimo ${PASSAGEM_GATE_CARACTERES} caracteres e ${PASSAGEM_GATE_PALAVRAS} palavras; há ${p.length} e ${palavras})`,
+    );
+  return faltas;
+}
+
 export type TheoAction =
   | {
       type: "fala";
@@ -617,7 +727,14 @@ export type TheoAction =
   | { type: "esclarecer"; atSec: number; orderId: string; raw: string }
   | { type: "confirmar"; atSec: number; orderId: string }
   | { type: "cancelar"; atSec: number; orderId: string }
-  | { type: "transferir"; atSec: number; destino: string; passagem: string };
+  | { type: "transferir"; atSec: number; destino: string; passagem: string }
+  | {
+      type: "raciocinio";
+      atSec: number;
+      representacao: string;
+      diferenciais: string[];
+      confianca: Confianca;
+    };
 
 export function monitorSnapshot(v: Vitals) {
   return `SpO₂ ${v.spo2}% (sinal ${v.oximeterSignal}) · FC ${v.hr} · FR ${v.rr} · ${SPEECH_LABEL[v.speech]} · ${EFFORT_LABEL[v.effort]}`;
@@ -709,6 +826,22 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
         return s;
       }
       const fields = { ...intent.fields, ...parseFields(action.raw) };
+      // Compromisso antes do dado: só para os exames que ESTE CASO declara
+      // decisivos (ver `theoGating` em case-theo.ts).
+      if (
+        intent.orderKind === "exame" &&
+        s.reasoning.length === 0 &&
+        exigeRaciocinioAntes(fields, action.raw)
+      ) {
+        push(s, {
+          type: "esclarecimento",
+          label: "Exame decisivo bloqueado — raciocínio não declarado",
+          detail:
+            "Este exame é decisivo neste caso: registre representação do problema, diagnósticos diferenciais e grau de confiança antes de solicitá-lo. Nada foi solicitado.",
+          tone: "warn",
+        });
+        return s;
+      }
       const missing = missingFields(intent.orderKind, intent.drug, fields);
       const order: Order = {
         id: `o${s.orders.length + 1}`,
@@ -784,14 +917,50 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
       push(s, { type: "decisao", label: `Cancelado — ${o.label}`, orderId: o.id, tone: "warn" });
       return s;
     }
+    case "raciocinio": {
+      const faltas = avaliarRaciocinio(action.representacao, action.diferenciais, action.confianca);
+      if (faltas.length > 0) {
+        push(s, {
+          type: "esclarecimento",
+          label: "Raciocínio não registrado",
+          detail: `Faltou: ${faltas.join("; ")}.`,
+          tone: "warn",
+        });
+        return s;
+      }
+      const entrada: ReasoningEntry = {
+        atSec: s.clockSec,
+        representacao: action.representacao.trim(),
+        diferenciais: action.diferenciais.map((x) => x.trim()).filter(Boolean),
+        confianca: action.confianca,
+      };
+      s.reasoning.push(entrada);
+      push(s, {
+        type: "raciocinio",
+        label: `Raciocínio declarado — ${CONFIANCA_LABEL[entrada.confianca]}`,
+        detail: `Representação: ${entrada.representacao} | Diferenciais: ${entrada.diferenciais.join("; ")}`,
+      });
+      return s;
+    }
     case "transferir": {
-      if (!action.destino.trim()) return s;
-      s.transfer = { destino: action.destino, passagem: action.passagem, atSec: s.clockSec };
+      const faltas = avaliarTransferencia(action.destino, action.passagem);
+      if (faltas.length > 0) {
+        push(s, {
+          type: "esclarecimento",
+          label: "Transferência não concluída — passagem de caso insuficiente",
+          detail: `Faltou: ${faltas.join("; ")}. O encontro segue aberto e sob sua responsabilidade.`,
+          tone: "warn",
+        });
+        return s;
+      }
+      const destino = action.destino.trim();
+      const passagem = action.passagem.trim();
+      s.transfer = { destino, passagem, atSec: s.clockSec };
       s.frozen = true;
       push(s, {
         type: "transferencia",
-        label: `Cuidado transferido — ${action.destino}`,
-        detail: action.passagem || "Passagem de caso não registrada.",
+        label: `Cuidado transferido — ${destino}`,
+        detail: `Destino: ${destino}. Passagem de caso: ${passagem}`,
         tone: "warn",
       });
       return s;
@@ -951,6 +1120,39 @@ export function buildDebrief(state: TheoState): Debrief {
         : undefined,
   });
 
+  const primeiroExameDecisivo = state.orders.find(
+    (o) => o.kind === "exame" && exigeRaciocinioAntes(o.fields, o.raw),
+  );
+  const raciocinios = state.reasoning;
+  const raciocinioAntesDoExame =
+    raciocinios.length > 0 &&
+    (primeiroExameDecisivo === undefined ||
+      raciocinios[0]!.atSec <= primeiroExameDecisivo.createdAtSec);
+  itens.push({
+    id: "raciocinio-declarado",
+    titulo: "Raciocínio declarado (representação do problema, diferenciais, confiança)",
+    // Registra que foi expresso e quando. A qualidade semântica do conteúdo
+    // não é julgada aqui — ver `naoAvaliavel`.
+    status:
+      raciocinios.length === 0
+        ? "nao_observado"
+        : raciocinioAntesDoExame
+          ? "demonstrado"
+          : "parcialmente",
+    evidencias: raciocinios
+      .slice(0, 3)
+      .map(
+        (r) =>
+          `${clockLabel(r.atSec)} — ${CONFIANCA_LABEL[r.confianca]} · representação: ${r.representacao} · diferenciais: ${r.diferenciais.join("; ")}`,
+      ),
+    consequencia:
+      raciocinios.length === 0
+        ? theoGating.examesDecisivos.length > 0
+          ? "Nenhum exame decisivo deste caso pôde ser solicitado, porque exige raciocínio declarado antes."
+          : "Este caso não declara exame decisivo, então nada foi bloqueado; o raciocínio simplesmente não foi declarado."
+        : undefined,
+  });
+
   itens.push({
     id: "seguranca",
     titulo: "Estabilização antes do limite de segurança",
@@ -967,19 +1169,26 @@ export function buildDebrief(state: TheoState): Debrief {
         : undefined,
   });
 
+  const transferenciasRecusadas = ev(
+    state,
+    (e) => e.label === "Transferência não concluída — passagem de caso insuficiente",
+  );
   itens.push({
     id: "transferencia",
-    titulo: "Transferência do cuidado com passagem estruturada",
-    status: state.transfer
-      ? state.transfer.passagem.trim().length >= 30
-        ? "demonstrado"
-        : "parcialmente"
-      : "nao_observado",
+    titulo: "Destino e passagem registrados",
+    // Afirma apenas o que é verificável: os dois campos foram preenchidos. Se a
+    // passagem é estruturada e suficiente NÃO é avaliado — ver `naoAvaliavel`.
+    status: state.transfer ? "demonstrado" : "nao_observado",
     evidencias: state.transfer
       ? [
-          `${clockLabel(state.transfer.atSec)} — ${state.transfer.destino}: ${state.transfer.passagem || "sem passagem registrada"}`,
+          `${clockLabel(state.transfer.atSec)} — destino: ${state.transfer.destino}`,
+          `${clockLabel(state.transfer.atSec)} — passagem: ${state.transfer.passagem}`,
         ]
-      : [],
+      : transferenciasRecusadas.slice(0, 2).map(fmt),
+    consequencia:
+      transferenciasRecusadas.length > 0
+        ? `Houve ${transferenciasRecusadas.length} tentativa(s) de encerrar sem preencher a passagem de caso; o encontro seguiu aberto até o registro.`
+        : undefined,
   });
 
   return {
@@ -993,6 +1202,8 @@ export function buildDebrief(state: TheoState): Debrief {
         : "Encontro ainda em curso.",
     naoAvaliavel: [
       "Raciocínio clínico expresso em texto livre não é validado automaticamente — requer leitura do preceptor.",
+      "A representação do problema, os diferenciais e o grau de confiança são registrados como expressos e datados; se estão corretos, pertinentes ou calibrados NÃO é avaliado automaticamente.",
+      "A qualidade da passagem de caso NÃO é avaliada automaticamente: o debrief afirma apenas que destino e passagem foram registrados. Se a passagem é estruturada, completa e segura é leitura do preceptor.",
       "A qualidade do vínculo com a criança e a mãe é registrada como ocorrência, não como acerto ou erro.",
     ],
   };

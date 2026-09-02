@@ -2,11 +2,7 @@ import type { VitalStatus } from "./cases";
 
 /** Estados possíveis de cada fato clínico no information ledger. */
 export type FactState =
-  | "hidden"
-  | "revealed"
-  | "withheld_sensitive"
-  | "unknown_to_patient"
-  | "unavailable";
+  "hidden" | "revealed" | "withheld_sensitive" | "unknown_to_patient" | "unavailable";
 
 export type FactCategory =
   | "demografia"
@@ -90,12 +86,7 @@ export type ClinicalEvent = {
 };
 
 export type EvaluationDomain =
-  | "rapport"
-  | "anamnese"
-  | "raciocinio"
-  | "diagnostico"
-  | "conduta"
-  | "seguranca";
+  "rapport" | "anamnese" | "raciocinio" | "diagnostico" | "conduta" | "seguranca";
 
 export type RubricCriterion = {
   id: string;

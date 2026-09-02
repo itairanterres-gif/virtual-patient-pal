@@ -245,6 +245,195 @@ export const maeFacts: ActorFact[] = [
 
 export const theoActorFacts: ActorFact[] = [...theoFacts, ...maeFacts];
 
+/**
+ * Verbalizações clínicas autorizadas, por fato, ALÉM do próprio `content`.
+ *
+ * O grounding aceita apenas palavras que apareçam nas verbalizações dos fatos
+ * EFETIVAMENTE CITADOS pelo ator naquela fala. Esta tabela existe para que a
+ * fala soe natural sem abrir a porta para invenção: cada variante é uma
+ * reformulação do mesmo fato, sem acrescentar informação clínica nova.
+ *
+ * Fica separada dos fatos de propósito — a verdade canônica em `theoFacts` e
+ * `maeFacts` não é alterada por decisão de redação, e esta tabela pode ser
+ * revisada isoladamente pelo pediatra responsável.
+ */
+export const verbalizacoesAutorizadas: Record<string, string[]> = {
+  // ---------------------------------------------------------------- Théo
+  "t-peito": ["Fica apertado aqui no peito.", "Parece que alguém aperta o meu peito."],
+  "t-cansaco-fala": [
+    "Cansa falar.",
+    "Eu tenho que parar no meio para respirar.",
+    "Falar muito me cansa.",
+  ],
+  "t-tosse": ["Tossi muito de noite.", "Não consegui dormir porque eu tossia muito."],
+  "t-chiado": [
+    "Faz um apito quando eu solto o ar.",
+    "Sai um barulhinho quando eu respiro.",
+    "Tem um apito no meu peito.",
+  ],
+  "t-brincar": [
+    "No recreio eu fiquei sentado.",
+    "Hoje eu não consegui correr.",
+    "Não deu para brincar.",
+  ],
+  "t-bombinha": [
+    "A mamãe deu a bombinha em casa.",
+    "Mesmo com a bombinha eu continuo cansado.",
+    "Já usei a bombinha.",
+  ],
+  "t-medo-mascara": [
+    "Não quero máscara no rosto.",
+    "A máscara me dá medo.",
+    "Tenho medo dessa máscara.",
+  ],
+  "t-medo-agulha": ["Tenho medo de agulha.", "Você vai furar o meu braço?"],
+  "t-quer-mae": [
+    "Quero a minha mãe aqui.",
+    "Deixa eu ficar de mão dada com a mamãe.",
+    "Quero a mamãe perto.",
+  ],
+  "t-sem-dor-barriga": ["A minha barriga não dói.", "Não dói nada na barriga."],
+
+  // ----------------------------------------------------------------- mãe
+  "m-inicio": [
+    "Começou com coriza há três dias.",
+    "Ontem à noite ele começou a chiar.",
+    "Faz três dias que começou, com coriza, e o chiado veio ontem à noite.",
+  ],
+  "m-piora-noite": [
+    "Piora de madrugada.",
+    "Piora muito quando ele corre.",
+    "De madrugada e correndo é quando piora.",
+  ],
+  "m-salbutamol-casa": [
+    "Dei a bombinha de salbutamol em casa duas vezes.",
+    "A última bombinha foi há mais ou menos duas horas.",
+    "Melhorou pouquinho com a bombinha.",
+  ],
+  "m-crises-anteriores": [
+    "Ele já teve quatro crises parecidas no último ano.",
+    "A última crise foi há uns quatro meses.",
+  ],
+  "m-internacao": [
+    "Ele nunca ficou internado.",
+    "Nunca precisou ir para a UTI.",
+    "Nunca precisou internar por isso.",
+  ],
+  "m-sem-manutencao": [
+    "Ele não usa bombinha todo dia.",
+    "Só usa quando fica ruim.",
+    "Não tem nada de uso contínuo.",
+  ],
+  "m-rinite": [
+    "Ele tem rinite alérgica.",
+    "Vive com o nariz entupido.",
+    "Com poeira o nariz dele fecha.",
+  ],
+  "m-sem-febre": ["Não teve febre.", "Eu medi em casa e estava normal.", "Febre ele não teve."],
+  "m-alergia-medicamento": [
+    "Ele não tem alergia a remédio nenhum.",
+    "Que a gente saiba, nenhuma alergia a remédio.",
+  ],
+  "m-vacinas": ["As vacinas estão em dia.", "A vacinação dele está toda em dia."],
+  "m-peso": ["Ele pesou 22 quilos na última consulta.", "O peso dele é 22 quilos."],
+  "m-escola": [
+    "Tem colega resfriado na escola.",
+    "Em casa a gente tem gato.",
+    "Na escola tem criança resfriada e em casa tem gato.",
+  ],
+  "m-asma-materna": [
+    "Quem tem asma sou eu, a mãe.",
+    "Isso é comigo, não com ele.",
+    "Ele nunca recebeu esse nome de nenhum médico.",
+  ],
+  "m-preocupacao": [
+    "Estou com muito medo.",
+    "Nunca vi ele cansado desse jeito.",
+    "Estou assustada com ele assim.",
+  ],
+  "m-culpa": [
+    "Fico achando que demorei demais para trazer ele.",
+    "Sinto que eu devia ter trazido antes.",
+  ],
+};
+
+/**
+ * Liberação de fatos sensíveis: só saem se o estudante perguntar de forma
+ * direta e compatível. Validado NO SERVIDOR, não no prompt — e o fato nem é
+ * enviado ao modelo enquanto não estiver liberado.
+ *
+ * Medo, culpa e preocupação são vivência, não dado clínico a colher: o
+ * simulador não deve entregá-los a quem não perguntou.
+ */
+export const gatilhosSensiveis: Record<string, string[]> = {
+  "t-medo-mascara": [
+    "medo",
+    "mascara",
+    "assust",
+    "incomod",
+    "nao gosta",
+    "aceita",
+    "colocar no rosto",
+    "tem vergonha",
+  ],
+  "t-medo-agulha": ["medo", "agulha", "injec", "picada", "furar", "espetar", "sangue no braco"],
+  "m-preocupacao": [
+    "preocup",
+    "medo",
+    "assust",
+    "como voce esta",
+    "como a senhora esta",
+    "o que a senhora sente",
+    "esta se sentindo",
+    "angusti",
+    "nervos",
+  ],
+  "m-culpa": [
+    "culpa",
+    "demor",
+    "antes",
+    "tarde",
+    "se cobra",
+    "acha que",
+    "responsavel",
+    "poderia ter",
+  ],
+};
+
+/**
+ * Catálogo fixo de fala social e de recusa. Nenhuma prosa social vem do
+ * modelo: ele escolhe um id daqui, como escolhe uma verbalização de fato.
+ */
+export const falasSociais: Record<Exclude<TheoActor, "equipe">, { id: string; texto: string }[]> = {
+  theo: [
+    { id: "social:theo:nao-sei", texto: "Não sei." },
+    { id: "social:theo:nao-lembro", texto: "Não lembro." },
+    { id: "social:theo:nunca", texto: "Isso nunca aconteceu." },
+    { id: "social:theo:oi", texto: "Oi." },
+    { id: "social:theo:silencio", texto: "Théo olha para você e não responde." },
+    { id: "social:theo:nao-quero-falar", texto: "Não quero falar disso agora." },
+  ],
+  mae: [
+    { id: "social:mae:nao-sei", texto: "Isso eu não sei responder." },
+    { id: "social:mae:nao-lembro", texto: "Não lembro direito, doutor." },
+    { id: "social:mae:nunca", texto: "Isso nunca aconteceu." },
+    { id: "social:mae:boa-tarde", texto: "Boa tarde, doutor." },
+    { id: "social:mae:obrigada", texto: "Obrigada." },
+    { id: "social:mae:prefiro-nao", texto: "Prefiro não falar disso agora." },
+  ],
+};
+
+/** Recusa padrão de cada ator, usada quando o modelo não seleciona nada. */
+export const recusaPadrao: Record<Exclude<TheoActor, "equipe">, string> = {
+  theo: "Não sei.",
+  mae: "Isso eu não sei responder.",
+};
+
+/** Todas as verbalizações autorizadas de um fato, incluindo o `content` canônico. */
+export function verbalizacoesDe(fact: ActorFact): string[] {
+  return [fact.content, ...(verbalizacoesAutorizadas[fact.id] ?? [])];
+}
+
 /** Verdade objetiva — obtida só por avaliação/exame. Nunca enviada a Théo ou à mãe. */
 export const theoObjectiveFacts: ObjectiveFact[] = [
   {
@@ -416,6 +605,22 @@ export const theoLatency = {
   examDuration: 15,
   testTurnaround: 240,
 } as const;
+
+/**
+ * Compromisso diagnóstico antes do dado — CONFIGURAÇÃO DESTE CASO, não regra
+ * do motor.
+ *
+ * A decisão pedagógica é "compromisso antes do exame DECISIVO". Presumir que
+ * todo exame complementar seja decisivo criaria regra artificial justamente
+ * aqui: a crise do Théo se avalia clinicamente, e radiografia, gasometria e
+ * hemograma não decidem o diagnóstico dele. Por isso a lista está vazia — a
+ * capacidade existe, fica desligada neste caso, e cada caso futuro declara os
+ * seus exames decisivos por chave de `TEST_MAP` (radiografia, gasometria,
+ * hemograma).
+ */
+export const theoGating = {
+  examesDecisivos: [] as string[],
+};
 
 /** 1 segundo real = 5 segundos de tempo clínico. */
 export const THEO_CLOCK_FACTOR = 5;

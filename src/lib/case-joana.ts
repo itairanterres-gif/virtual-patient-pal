@@ -121,8 +121,7 @@ const facts: ClinicalFact[] = [
     id: "sensivel-medo",
     category: "historia",
     label: "Medo de morrer",
-    content:
-      "Tem muito medo de morrer como o pai; só verbaliza isso se acolhida com empatia.",
+    content: "Tem muito medo de morrer como o pai; só verbaliza isso se acolhida com empatia.",
     patientKnows: true,
     initialState: "withheld_sensitive",
   },
@@ -260,7 +259,8 @@ const facts: ClinicalFact[] = [
     id: "ex-rx",
     category: "exame_complementar",
     label: "Radiografia de tórax",
-    content: "Congestão pulmonar leve, área cardíaca no limite superior, sem alargamento de mediastino.",
+    content:
+      "Congestão pulmonar leve, área cardíaca no limite superior, sem alargamento de mediastino.",
     patientKnows: false,
     initialState: "unknown_to_patient",
     status: "warn",
@@ -352,69 +352,374 @@ const physicalExams: PhysicalExamAction[] = [
 ];
 
 const tests: TestOrder[] = [
-  { id: "t-ecg", label: "ECG 12 derivações", category: "eletro", reveals: ["ex-ecg"], turnaroundSec: 10 },
-  { id: "t-glicemia", label: "Glicemia capilar", category: "beira-leito", reveals: ["ex-glicemia"], turnaroundSec: 5 },
-  { id: "t-troponina", label: "Troponina T ultrassensível", category: "laboratorio", reveals: ["ex-troponina"], turnaroundSec: 45 },
-  { id: "t-hemograma", label: "Hemograma", category: "laboratorio", reveals: ["ex-hemograma"], turnaroundSec: 40 },
-  { id: "t-eletrolitos", label: "Eletrólitos e função renal", category: "laboratorio", reveals: ["ex-eletrolitos"], turnaroundSec: 45 },
-  { id: "t-rx", label: "Radiografia de tórax", category: "imagem", reveals: ["ex-rx"], turnaroundSec: 60 },
-  { id: "t-dimero", label: "D-dímero", category: "laboratorio", reveals: ["ex-dimero"], turnaroundSec: 30 },
+  {
+    id: "t-ecg",
+    label: "ECG 12 derivações",
+    category: "eletro",
+    reveals: ["ex-ecg"],
+    turnaroundSec: 10,
+  },
+  {
+    id: "t-glicemia",
+    label: "Glicemia capilar",
+    category: "beira-leito",
+    reveals: ["ex-glicemia"],
+    turnaroundSec: 5,
+  },
+  {
+    id: "t-troponina",
+    label: "Troponina T ultrassensível",
+    category: "laboratorio",
+    reveals: ["ex-troponina"],
+    turnaroundSec: 45,
+  },
+  {
+    id: "t-hemograma",
+    label: "Hemograma",
+    category: "laboratorio",
+    reveals: ["ex-hemograma"],
+    turnaroundSec: 40,
+  },
+  {
+    id: "t-eletrolitos",
+    label: "Eletrólitos e função renal",
+    category: "laboratorio",
+    reveals: ["ex-eletrolitos"],
+    turnaroundSec: 45,
+  },
+  {
+    id: "t-rx",
+    label: "Radiografia de tórax",
+    category: "imagem",
+    reveals: ["ex-rx"],
+    turnaroundSec: 60,
+  },
+  {
+    id: "t-dimero",
+    label: "D-dímero",
+    category: "laboratorio",
+    reveals: ["ex-dimero"],
+    turnaroundSec: 30,
+  },
 ];
 
 const managements: ManagementAction[] = [
-  { id: "m-monitor", label: "Monitorização contínua + oximetria", category: "monitorizacao", appropriate: true, note: "Monitorização precoce em dor torácica de alto risco." },
-  { id: "m-acesso", label: "Acesso venoso periférico calibroso", category: "acesso", appropriate: true, note: "Permite terapia venosa imediata." },
-  { id: "m-o2", label: "Oxigênio suplementar 3 L/min", category: "oxigenio", appropriate: true, note: "Indicado com SpO₂ 88%." },
-  { id: "m-aas", label: "AAS 300 mg VO mastigado", category: "medicamento", appropriate: true, note: "Antiagregação imediata, reduz mortalidade." },
-  { id: "m-clopidogrel", label: "Segundo antiagregante (clopidogrel/ticagrelor)", category: "medicamento", appropriate: true, note: "Dupla antiagregação antes da reperfusão." },
-  { id: "m-nitrato", label: "Nitrato sublingual", category: "medicamento", appropriate: true, note: "Alívio da dor isquêmica; checar PA e uso de vasodilatador." },
-  { id: "m-morfina", label: "Morfina IV se dor refratária", category: "medicamento", appropriate: true, note: "Analgesia de resgate." },
-  { id: "m-hemodinamica", label: "Acionar hemodinâmica — angioplastia primária", category: "interconsulta", appropriate: true, note: "Reperfusão é a conduta que define o prognóstico." },
-  { id: "m-transferencia", label: "Transferir para unidade coronariana", category: "transferencia", appropriate: true, note: "Cuidado contínuo após reperfusão." },
-  { id: "m-fluidos", label: "Expansão volêmica agressiva 1000 mL", category: "fluidos", appropriate: false, note: "Risco de piora da congestão pulmonar nesta paciente." },
-  { id: "m-alta", label: "Liberar para casa com analgésico", category: "procedimento", appropriate: false, note: "Conduta insegura em IAM com supra de ST." },
+  {
+    id: "m-monitor",
+    label: "Monitorização contínua + oximetria",
+    category: "monitorizacao",
+    appropriate: true,
+    note: "Monitorização precoce em dor torácica de alto risco.",
+  },
+  {
+    id: "m-acesso",
+    label: "Acesso venoso periférico calibroso",
+    category: "acesso",
+    appropriate: true,
+    note: "Permite terapia venosa imediata.",
+  },
+  {
+    id: "m-o2",
+    label: "Oxigênio suplementar 3 L/min",
+    category: "oxigenio",
+    appropriate: true,
+    note: "Indicado com SpO₂ 88%.",
+  },
+  {
+    id: "m-aas",
+    label: "AAS 300 mg VO mastigado",
+    category: "medicamento",
+    appropriate: true,
+    note: "Antiagregação imediata, reduz mortalidade.",
+  },
+  {
+    id: "m-clopidogrel",
+    label: "Segundo antiagregante (clopidogrel/ticagrelor)",
+    category: "medicamento",
+    appropriate: true,
+    note: "Dupla antiagregação antes da reperfusão.",
+  },
+  {
+    id: "m-nitrato",
+    label: "Nitrato sublingual",
+    category: "medicamento",
+    appropriate: true,
+    note: "Alívio da dor isquêmica; checar PA e uso de vasodilatador.",
+  },
+  {
+    id: "m-morfina",
+    label: "Morfina IV se dor refratária",
+    category: "medicamento",
+    appropriate: true,
+    note: "Analgesia de resgate.",
+  },
+  {
+    id: "m-hemodinamica",
+    label: "Acionar hemodinâmica — angioplastia primária",
+    category: "interconsulta",
+    appropriate: true,
+    note: "Reperfusão é a conduta que define o prognóstico.",
+  },
+  {
+    id: "m-transferencia",
+    label: "Transferir para unidade coronariana",
+    category: "transferencia",
+    appropriate: true,
+    note: "Cuidado contínuo após reperfusão.",
+  },
+  {
+    id: "m-fluidos",
+    label: "Expansão volêmica agressiva 1000 mL",
+    category: "fluidos",
+    appropriate: false,
+    note: "Risco de piora da congestão pulmonar nesta paciente.",
+  },
+  {
+    id: "m-alta",
+    label: "Liberar para casa com analgésico",
+    category: "procedimento",
+    appropriate: false,
+    note: "Conduta insegura em IAM com supra de ST.",
+  },
 ];
 
 const rubric: RubricCriterion[] = [
   // rapport
-  { id: "r-apresentacao", domain: "rapport", label: "Apresentou-se / cumprimentou a paciente", weight: 1, check: (c) => asked(c, "bom dia", "boa tarde", "boa noite", "meu nome", "sou o", "sou a", "olá") },
-  { id: "r-empatia", domain: "rapport", label: "Acolheu o medo e o desconforto da paciente", weight: 1, check: (c) => asked(c, "calma", "entendo", "vamos cuidar", "medo", "tranquil", "sinto muito") },
-  { id: "r-aberta", domain: "rapport", label: "Usou ao menos uma pergunta aberta", weight: 1, check: (c) => c.studentQuestions.some((q) => /como|o que|conte|me fale|descreva/i.test(q)) },
+  {
+    id: "r-apresentacao",
+    domain: "rapport",
+    label: "Apresentou-se / cumprimentou a paciente",
+    weight: 1,
+    check: (c) =>
+      asked(c, "bom dia", "boa tarde", "boa noite", "meu nome", "sou o", "sou a", "olá"),
+  },
+  {
+    id: "r-empatia",
+    domain: "rapport",
+    label: "Acolheu o medo e o desconforto da paciente",
+    weight: 1,
+    check: (c) => asked(c, "calma", "entendo", "vamos cuidar", "medo", "tranquil", "sinto muito"),
+  },
+  {
+    id: "r-aberta",
+    domain: "rapport",
+    label: "Usou ao menos uma pergunta aberta",
+    weight: 1,
+    check: (c) => c.studentQuestions.some((q) => /como|o que|conte|me fale|descreva/i.test(q)),
+  },
 
   // anamnese
-  { id: "a-caracterizou", domain: "anamnese", label: "Caracterizou a dor (tipo, local, intensidade)", weight: 2, check: (c) => asked(c, "dor", "aperto", "intensidade", "doi", "dói") },
-  { id: "a-tempo", domain: "anamnese", label: "Investigou início e duração", weight: 1, check: (c) => asked(c, "quando começou", "há quanto tempo", "quanto tempo", "início") },
-  { id: "a-irradiacao", domain: "anamnese", label: "Investigou irradiação", weight: 1, check: (c) => asked(c, "irradia", "espalha", "braço", "mandíbula", "costas") },
-  { id: "a-associados", domain: "anamnese", label: "Investigou sintomas associados", weight: 1, check: (c) => asked(c, "falta de ar", "suor", "náusea", "enjoo", "tontura", "palpitação", "vômito") },
-  { id: "a-antecedentes", domain: "anamnese", label: "Investigou antecedentes e fatores de risco", weight: 1, check: (c) => asked(c, "pressão alta", "hipertens", "diabet", "fuma", "tabag", "colesterol", "família", "infarto") },
-  { id: "a-medicamentos", domain: "anamnese", label: "Perguntou medicamentos em uso", weight: 1, check: (c) => asked(c, "medicament", "remédio", "toma algum", "usa algum") },
-  { id: "a-alergias", domain: "anamnese", label: "Perguntou alergias", weight: 1, check: (c) => asked(c, "alergia", "alérgic") },
+  {
+    id: "a-caracterizou",
+    domain: "anamnese",
+    label: "Caracterizou a dor (tipo, local, intensidade)",
+    weight: 2,
+    check: (c) => asked(c, "dor", "aperto", "intensidade", "doi", "dói"),
+  },
+  {
+    id: "a-tempo",
+    domain: "anamnese",
+    label: "Investigou início e duração",
+    weight: 1,
+    check: (c) => asked(c, "quando começou", "há quanto tempo", "quanto tempo", "início"),
+  },
+  {
+    id: "a-irradiacao",
+    domain: "anamnese",
+    label: "Investigou irradiação",
+    weight: 1,
+    check: (c) => asked(c, "irradia", "espalha", "braço", "mandíbula", "costas"),
+  },
+  {
+    id: "a-associados",
+    domain: "anamnese",
+    label: "Investigou sintomas associados",
+    weight: 1,
+    check: (c) =>
+      asked(c, "falta de ar", "suor", "náusea", "enjoo", "tontura", "palpitação", "vômito"),
+  },
+  {
+    id: "a-antecedentes",
+    domain: "anamnese",
+    label: "Investigou antecedentes e fatores de risco",
+    weight: 1,
+    check: (c) =>
+      asked(
+        c,
+        "pressão alta",
+        "hipertens",
+        "diabet",
+        "fuma",
+        "tabag",
+        "colesterol",
+        "família",
+        "infarto",
+      ),
+  },
+  {
+    id: "a-medicamentos",
+    domain: "anamnese",
+    label: "Perguntou medicamentos em uso",
+    weight: 1,
+    check: (c) => asked(c, "medicament", "remédio", "toma algum", "usa algum"),
+  },
+  {
+    id: "a-alergias",
+    domain: "anamnese",
+    label: "Perguntou alergias",
+    weight: 1,
+    check: (c) => asked(c, "alergia", "alérgic"),
+  },
 
   // raciocínio
-  { id: "rc-exame-cardio", domain: "raciocinio", label: "Examinou o aparelho cardiovascular", weight: 1, check: (c) => didEvent(c, "exame_fisico", "pe-ausculta-cardiaca") || didEvent(c, "exame_fisico", "pe-pulso") },
-  { id: "rc-exame-pulmonar", domain: "raciocinio", label: "Auscultou os pulmões (identificou congestão)", weight: 1, check: (c) => didEvent(c, "exame_fisico", "pe-ausculta-pulmonar") },
-  { id: "rc-perfusao", domain: "raciocinio", label: "Avaliou perfusão periférica", weight: 1, check: (c) => didEvent(c, "exame_fisico", "pe-perfusao") },
-  { id: "rc-ecg", domain: "raciocinio", label: "Solicitou ECG", weight: 2, check: (c) => didEvent(c, "exame_solicitado", "t-ecg") },
-  { id: "rc-troponina", domain: "raciocinio", label: "Solicitou marcador de necrose miocárdica", weight: 1, check: (c) => didEvent(c, "exame_solicitado", "t-troponina") },
-  { id: "rc-sem-excesso", domain: "raciocinio", label: "Não solicitou exames irrelevantes para o quadro", weight: 1, check: (c) => !didEvent(c, "exame_solicitado", "t-dimero") },
+  {
+    id: "rc-exame-cardio",
+    domain: "raciocinio",
+    label: "Examinou o aparelho cardiovascular",
+    weight: 1,
+    check: (c) =>
+      didEvent(c, "exame_fisico", "pe-ausculta-cardiaca") ||
+      didEvent(c, "exame_fisico", "pe-pulso"),
+  },
+  {
+    id: "rc-exame-pulmonar",
+    domain: "raciocinio",
+    label: "Auscultou os pulmões (identificou congestão)",
+    weight: 1,
+    check: (c) => didEvent(c, "exame_fisico", "pe-ausculta-pulmonar"),
+  },
+  {
+    id: "rc-perfusao",
+    domain: "raciocinio",
+    label: "Avaliou perfusão periférica",
+    weight: 1,
+    check: (c) => didEvent(c, "exame_fisico", "pe-perfusao"),
+  },
+  {
+    id: "rc-ecg",
+    domain: "raciocinio",
+    label: "Solicitou ECG",
+    weight: 2,
+    check: (c) => didEvent(c, "exame_solicitado", "t-ecg"),
+  },
+  {
+    id: "rc-troponina",
+    domain: "raciocinio",
+    label: "Solicitou marcador de necrose miocárdica",
+    weight: 1,
+    check: (c) => didEvent(c, "exame_solicitado", "t-troponina"),
+  },
+  {
+    id: "rc-sem-excesso",
+    domain: "raciocinio",
+    label: "Não solicitou exames irrelevantes para o quadro",
+    weight: 1,
+    check: (c) => !didEvent(c, "exame_solicitado", "t-dimero"),
+  },
 
   // diagnóstico
-  { id: "d-hipotese", domain: "diagnostico", label: "Registrou hipótese diagnóstica", weight: 1, check: (c) => c.events.some((e) => e.kind === "hipotese") },
-  { id: "d-correta", domain: "diagnostico", label: "Hipótese compatível com IAM com supra de ST", weight: 3, check: (c) => c.events.some((e) => e.kind === "hipotese" && /iam|infarto|supra|stemi|sca com supra/i.test(`${e.label} ${e.detail ?? ""}`)) },
+  {
+    id: "d-hipotese",
+    domain: "diagnostico",
+    label: "Registrou hipótese diagnóstica",
+    weight: 1,
+    check: (c) => c.events.some((e) => e.kind === "hipotese"),
+  },
+  {
+    id: "d-correta",
+    domain: "diagnostico",
+    label: "Hipótese compatível com IAM com supra de ST",
+    weight: 3,
+    check: (c) =>
+      c.events.some(
+        (e) =>
+          e.kind === "hipotese" &&
+          /iam|infarto|supra|stemi|sca com supra/i.test(`${e.label} ${e.detail ?? ""}`),
+      ),
+  },
 
   // conduta
-  { id: "c-aas", domain: "conduta", label: "Administrou AAS", weight: 2, check: (c) => didEvent(c, "conduta", "m-aas") },
-  { id: "c-o2", domain: "conduta", label: "Ofertou oxigênio (SpO₂ 88%)", weight: 1, check: (c) => didEvent(c, "conduta", "m-o2") },
-  { id: "c-acesso", domain: "conduta", label: "Obteve acesso venoso", weight: 1, check: (c) => didEvent(c, "conduta", "m-acesso") },
-  { id: "c-reperfusao", domain: "conduta", label: "Acionou reperfusão (hemodinâmica)", weight: 3, check: (c) => didEvent(c, "conduta", "m-hemodinamica") },
-  { id: "c-nitrato", domain: "conduta", label: "Considerou nitrato/analgesia para a dor", weight: 1, check: (c) => didEvent(c, "conduta", "m-nitrato") || didEvent(c, "conduta", "m-morfina") },
+  {
+    id: "c-aas",
+    domain: "conduta",
+    label: "Administrou AAS",
+    weight: 2,
+    check: (c) => didEvent(c, "conduta", "m-aas"),
+  },
+  {
+    id: "c-o2",
+    domain: "conduta",
+    label: "Ofertou oxigênio (SpO₂ 88%)",
+    weight: 1,
+    check: (c) => didEvent(c, "conduta", "m-o2"),
+  },
+  {
+    id: "c-acesso",
+    domain: "conduta",
+    label: "Obteve acesso venoso",
+    weight: 1,
+    check: (c) => didEvent(c, "conduta", "m-acesso"),
+  },
+  {
+    id: "c-reperfusao",
+    domain: "conduta",
+    label: "Acionou reperfusão (hemodinâmica)",
+    weight: 3,
+    check: (c) => didEvent(c, "conduta", "m-hemodinamica"),
+  },
+  {
+    id: "c-nitrato",
+    domain: "conduta",
+    label: "Considerou nitrato/analgesia para a dor",
+    weight: 1,
+    check: (c) => didEvent(c, "conduta", "m-nitrato") || didEvent(c, "conduta", "m-morfina"),
+  },
 
   // segurança clínica / priorização
-  { id: "s-monitor", domain: "seguranca", label: "Monitorizou a paciente precocemente", weight: 2, check: (c) => { const t = eventAtSec(c, "conduta", "m-monitor"); return t !== undefined && t <= 300; } },
-  { id: "s-ecg-precoce", domain: "seguranca", label: "ECG solicitado nos primeiros 10 minutos", weight: 2, check: (c) => { const t = eventAtSec(c, "exame_solicitado", "t-ecg"); return t !== undefined && t <= 600; } },
-  { id: "s-sem-alta", domain: "seguranca", label: "Não liberou a paciente para casa", weight: 2, check: (c) => !didEvent(c, "conduta", "m-alta") },
-  { id: "s-sem-volume", domain: "seguranca", label: "Evitou expansão volêmica agressiva com congestão", weight: 1, check: (c) => !didEvent(c, "conduta", "m-fluidos") },
-  { id: "s-reperfusao-tempo", domain: "seguranca", label: "Reperfusão acionada em tempo hábil", weight: 2, check: (c) => { const t = eventAtSec(c, "conduta", "m-hemodinamica"); return t !== undefined && t <= 900; } },
+  {
+    id: "s-monitor",
+    domain: "seguranca",
+    label: "Monitorizou a paciente precocemente",
+    weight: 2,
+    check: (c) => {
+      const t = eventAtSec(c, "conduta", "m-monitor");
+      return t !== undefined && t <= 300;
+    },
+  },
+  {
+    id: "s-ecg-precoce",
+    domain: "seguranca",
+    label: "ECG solicitado nos primeiros 10 minutos",
+    weight: 2,
+    check: (c) => {
+      const t = eventAtSec(c, "exame_solicitado", "t-ecg");
+      return t !== undefined && t <= 600;
+    },
+  },
+  {
+    id: "s-sem-alta",
+    domain: "seguranca",
+    label: "Não liberou a paciente para casa",
+    weight: 2,
+    check: (c) => !didEvent(c, "conduta", "m-alta"),
+  },
+  {
+    id: "s-sem-volume",
+    domain: "seguranca",
+    label: "Evitou expansão volêmica agressiva com congestão",
+    weight: 1,
+    check: (c) => !didEvent(c, "conduta", "m-fluidos"),
+  },
+  {
+    id: "s-reperfusao-tempo",
+    domain: "seguranca",
+    label: "Reperfusão acionada em tempo hábil",
+    weight: 2,
+    check: (c) => {
+      const t = eventAtSec(c, "conduta", "m-hemodinamica");
+      return t !== undefined && t <= 900;
+    },
+  },
 ];
 
 export const joanaCase: EngineCase = {
