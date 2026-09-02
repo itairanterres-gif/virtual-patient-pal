@@ -5,6 +5,8 @@ import { getCase, type ClinicalCase, type VitalStatus } from "@/lib/cases";
 import { patientAvatars } from "@/lib/avatars";
 import { askPatient, narrateFeedback } from "@/lib/patient.functions";
 import { getEngineCase } from "@/lib/engine-registry";
+import { TheoStation } from "@/components/theo-station";
+import { THEO_CASE_ID } from "@/lib/case-theo";
 import {
   clock,
   makeEvent,
@@ -38,8 +40,15 @@ export const Route = createFileRoute("/caso/$id")({
       ],
     };
   },
-  component: Cockpit,
+  component: CaseRoute,
 });
+
+function CaseRoute() {
+  const { clinicalCase } = Route.useLoaderData();
+  // Caso canônico do Théo: estação própria, motor determinístico.
+  if (clinicalCase.id === THEO_CASE_ID) return <TheoStation />;
+  return <Cockpit />;
+}
 
 type ChatMsg = { role: "student" | "patient" | "alert"; content: string; at: string };
 type Feedback = { comentarios: Record<string, string>; resumo: string; melhorias: string[] };
