@@ -529,7 +529,10 @@ function parseFields(raw: string): OrderFields {
 }
 
 const TEST_MAP: { re: RegExp; key: string }[] = [
-  { re: /raio|radiograf|\brx\b|torax|tórax/, key: "radiografia" },
+  // Sem o token solto "torax": ele fazia "auscultar o tórax" — exame FÍSICO —
+  // ser reconhecido como pedido de radiografia. A solicitação explícita é
+  // reconhecida por "raio", "radiograf" ou "rx".
+  { re: /raio|radiograf|\brx\b/, key: "radiografia" },
   { re: /gasometr|gaso/, key: "gasometria" },
   { re: /hemograma|sangue|laborat/, key: "hemograma" },
 ];

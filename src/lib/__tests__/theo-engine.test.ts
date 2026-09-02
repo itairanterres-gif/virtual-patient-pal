@@ -557,7 +557,12 @@ describe("exame decisivo é configuração do caso, não regra geral", () => {
     expect(chaveDoExame({}, "solicitar radiografia de tórax")).toBe("radiografia");
     expect(chaveDoExame({}, "colher gasometria arterial")).toBe("gasometria");
     expect(chaveDoExame({}, "pedir hemograma")).toBe("hemograma");
-    expect(chaveDoExame({}, "auscultar o tórax")).toBe("radiografia"); // "torax" casa a regex
+    // Exame físico do tórax não é pedido de imagem.
+    expect(chaveDoExame({}, "auscultar o tórax")).toBeNull();
+    expect(chaveDoExame({}, "examinar o tórax")).toBeNull();
+    // Solicitações explícitas de imagem seguem reconhecidas.
+    expect(chaveDoExame({}, "solicitar raio-x de tórax")).toBe("radiografia");
+    expect(chaveDoExame({}, "pedir RX de tórax")).toBe("radiografia");
     expect(chaveDoExame({}, "medir o peso")).toBeNull();
     expect(chaveDoExame({ test: "gasometria" }, "aquele exame")).toBe("gasometria");
   });
