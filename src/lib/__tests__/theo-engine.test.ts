@@ -9,7 +9,7 @@ import {
   type TheoAction,
   type TheoState,
 } from "../theo-engine";
-import { validateActorReply } from "../theo-actors";
+import { MAX_FATOS_CITADOS, validateActorReply } from "../theo-actors";
 import { getEngineCase } from "../engine-registry";
 import { maeFacts, THEO_CASE_ID } from "../case-theo";
 
@@ -60,6 +60,72 @@ describe("vazamento de informação pelos atores", () => {
     const v = validateActorReply("mae", fact.content, ["m-crises-anteriores"]);
     expect(v.ok).toBe(true);
     expect(v.factIds).toEqual(["m-crises-anteriores"]);
+  });
+});
+
+describe("grounding: a fala precisa decorrer dos fatos citados", () => {
+  it("rejeita fala clínica com factIds vazio", () => {
+    const v = validateActorReply("mae", "Meu pai morreu ontem.", []);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toContain("fala clínica sem fato citado");
+    expect(v.factIds).toEqual([]);
+  });
+
+  it("aceita recusa curta com factIds vazio", () => {
+    for (const recusa of ["Não sei.", "Não lembro disso, tio.", "Isso nunca aconteceu."]) {
+      const v = validateActorReply("theo", recusa, []);
+      expect(v.ok).toBe(true);
+      expect(v.factIds).toEqual([]);
+    }
+  });
+
+  it("rejeita texto inventado apesar de o ID citado ser válido", () => {
+    const v = validateActorReply("theo", "Eu tossi sangue à noite.", ["t-tosse"]);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toContain("sangue");
+  });
+
+  it("rejeita número que pertence a outro fato do mesmo ator", () => {
+    // "22" existe no corpus da mãe (m-peso), mas não no fato citado.
+    const peso = maeFacts.find((f) => f.id === "m-peso")!;
+    expect(peso.content).toContain("22");
+    const v = validateActorReply("mae", "Ele já teve 22 crises parecidas.", [
+      "m-crises-anteriores",
+    ]);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toContain("número não sustentado pelos fatos citados");
+    // contraprova: o mesmo número passa quando citado com o fato que o sustenta
+    expect(validateActorReply("mae", peso.content, ["m-peso"]).ok).toBe(true);
+  });
+
+  it("rejeita fato citado sem uso na fala (corpus-padding)", () => {
+    const v = validateActorReply("mae", "As vacinas estão em dia.", ["m-vacinas", "m-peso"]);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toContain("m-peso");
+  });
+
+  it("rejeita citar mais fatos que o limite por fala", () => {
+    const ids = maeFacts.slice(0, MAX_FATOS_CITADOS + 1).map((f) => f.id);
+    const v = validateActorReply("mae", "Começou com coriza há três dias.", ids);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toContain(`mais de ${MAX_FATOS_CITADOS}`);
+  });
+
+  it("rejeita atribuir ao paciente a asma que é da mãe, mesmo com palavras autorizadas", () => {
+    const v = validateActorReply("mae", "Ele tem asma.", ["m-asma-materna"]);
+    expect(v.ok).toBe(false);
+    // a mãe segue podendo falar da própria asma
+    expect(validateActorReply("mae", "Quem tem asma sou eu, a mãe.", ["m-asma-materna"]).ok).toBe(
+      true,
+    );
+  });
+
+  it("aceita paráfrase montada com as verbalizações autorizadas do fato citado", () => {
+    const v = validateActorReply("theo", "Cansa falar, tenho que parar no meio para respirar.", [
+      "t-cansaco-fala",
+    ]);
+    expect(v.ok).toBe(true);
+    expect(v.factIds).toEqual(["t-cansaco-fala"]);
   });
 });
 
