@@ -7,7 +7,6 @@ import { askTheoActor } from "@/lib/theo.functions";
 import { teamReply } from "@/lib/theo-actors";
 import {
   AIR_LABEL,
-  advanceTo,
   applyAction,
   buildDebrief,
   clockLabel,
@@ -19,7 +18,6 @@ import {
   CONFIANCA_LABEL,
   parseIntent,
   SPEECH_LABEL,
-  THEO_CLOCK_FACTOR,
   WHEEZE_LABEL,
   type CausalEvent,
   type Confianca,
@@ -68,36 +66,21 @@ export function TheoStation() {
   const [showTrace, setShowTrace] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
 
-  // Relógio clínico: o motor é dono do tempo. A UI só informa o alvo,
-  // recalculado por diferença de timestamp (recupera suspensão da aba).
-  const anchor = useRef({ real: Date.now(), clinical: 0 });
+  // Tempo clínico discreto: o motor é dono do relógio e ele só anda quando uma
+  // ação o consome. A UI não tem âncora temporal, não tem intervalo e não sabe
+  // que horas são — ficar com a página aberta, ler, digitar ou esperar a
+  // resposta do modelo não avança nada.
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  const commit = (next: TheoState) => {
-    anchor.current = { real: Date.now(), clinical: next.clockSec };
+  const dispatch = (a: TheoAction) => {
+    const next = applyAction(stateRef.current, a);
+    stateRef.current = next;
     setState(next);
   };
 
-  const dispatch = (a: TheoAction) => {
-    const now = targetSec();
-    commit(applyAction(stateRef.current, { ...a, atSec: now } as TheoAction));
-  };
-
-  function targetSec() {
-    const elapsedReal = Math.floor((Date.now() - anchor.current.real) / 1000);
-    return anchor.current.clinical + elapsedReal * THEO_CLOCK_FACTOR;
-  }
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      const s = stateRef.current;
-      if (s.frozen) return;
-      const next = advanceTo(s, targetSec());
-      if (next !== s) setState(next);
-    }, 1000);
-    return () => clearInterval(t);
-  }, []);
+  /** Instante clínico corrente, só para etiquetar a mensagem no chat. */
+  const agora = () => clockLabel(stateRef.current.clockSec);
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
@@ -117,12 +100,12 @@ export function TheoStation() {
     const q = question.trim();
     if (!q || waiting || state.frozen) return;
     setQuestion("");
-    setMessages((m) => [...m, { who: "voce", text: q, at: clockLabel(targetSec()) }]);
+    setMessages((m) => [...m, { who: "voce", text: q, at: agora() }]);
 
     if (speaker === "equipe") {
       const reply = teamReply(q);
-      dispatch({ type: "fala", atSec: 0, actor: "equipe", question: q, reply, grounded: true });
-      setMessages((m) => [...m, { who: "equipe", text: reply, at: clockLabel(targetSec()) }]);
+      dispatch({ type: "fala", actor: "equipe", question: q, reply, grounded: true });
+      setMessages((m) => [...m, { who: "equipe", text: reply, at: agora() }]);
       return;
     }
 
@@ -138,7 +121,6 @@ export function TheoStation() {
       const res = await ask({ data: { actor: speaker, question: q, transcript: history } });
       dispatch({
         type: "fala",
-        atSec: 0,
         actor: speaker,
         question: q,
         reply: res.reply,
@@ -146,7 +128,7 @@ export function TheoStation() {
       });
       setMessages((m) => [
         ...m,
-        { who: speaker, text: res.reply, at: clockLabel(targetSec()), warn: !res.grounded },
+        { who: speaker, text: res.reply, at: agora(), warn: !res.grounded },
       ]);
     } catch {
       setMessages((m) => [
@@ -154,7 +136,7 @@ export function TheoStation() {
         {
           who: "sistema",
           text: "Falha de comunicação. Tente novamente.",
-          at: clockLabel(targetSec()),
+          at: agora(),
           warn: true,
         },
       ]);
@@ -172,12 +154,12 @@ export function TheoStation() {
       setShowTransfer(true);
       return;
     }
-    if (intent.kind === "exame") dispatch({ type: "exame", atSec: 0, raw });
-    else if (intent.kind === "monitor") dispatch({ type: "monitor", atSec: 0 });
-    else if (intent.kind === "reavaliar") dispatch({ type: "reavaliar", atSec: 0 });
+    if (intent.kind === "exame") dispatch({ type: "exame", raw });
+    else if (intent.kind === "monitor") dispatch({ type: "monitor" });
+    else if (intent.kind === "reavaliar") dispatch({ type: "reavaliar" });
     else if (intent.kind === "aguardar")
-      dispatch({ type: "aguardar", atSec: 0, seconds: intent.seconds ?? 120 });
-    else dispatch({ type: "ordem", atSec: 0, raw, intent });
+      dispatch({ type: "aguardar", seconds: intent.seconds ?? 120 });
+    else dispatch({ type: "ordem", raw, intent });
   }
 
   // A UI espelha a validação do motor para não oferecer um botão que o motor
@@ -191,7 +173,7 @@ export function TheoStation() {
 
   function confirmTransfer() {
     if (faltasTransferencia.length > 0) return;
-    dispatch({ type: "transferir", atSec: 0, destino: destino.trim(), passagem: passagem.trim() });
+    dispatch({ type: "transferir", destino: destino.trim(), passagem: passagem.trim() });
     setShowTransfer(false);
   }
 
@@ -199,7 +181,6 @@ export function TheoStation() {
     if (faltasRaciocinio.length > 0) return;
     dispatch({
       type: "raciocinio",
-      atSec: 0,
       representacao: representacao.trim(),
       diferenciais: listaDiferenciais,
       confianca,
@@ -469,7 +450,7 @@ export function TheoStation() {
                                 const raw = (clarify[o.id] ?? "").trim();
                                 if (!raw) return;
                                 setClarify((c) => ({ ...c, [o.id]: "" }));
-                                dispatch({ type: "esclarecer", atSec: 0, orderId: o.id, raw });
+                                dispatch({ type: "esclarecer", orderId: o.id, raw });
                               }}
                               className="rounded-md bg-card px-2.5 py-1.5 font-mono text-[10px] ring-1 ring-line"
                             >
@@ -481,13 +462,13 @@ export function TheoStation() {
                       {o.status === "aguardando_confirmacao" && (
                         <div className="mt-1.5 flex gap-2">
                           <button
-                            onClick={() => dispatch({ type: "confirmar", atSec: 0, orderId: o.id })}
+                            onClick={() => dispatch({ type: "confirmar", orderId: o.id })}
                             className="rounded-md bg-primary/25 px-2.5 py-1.5 font-mono text-[10px] ring-1 ring-primary/40"
                           >
                             confirmar ordem
                           </button>
                           <button
-                            onClick={() => dispatch({ type: "cancelar", atSec: 0, orderId: o.id })}
+                            onClick={() => dispatch({ type: "cancelar", orderId: o.id })}
                             className="rounded-md bg-card px-2.5 py-1.5 font-mono text-[10px] text-faint ring-1 ring-line"
                           >
                             cancelar
