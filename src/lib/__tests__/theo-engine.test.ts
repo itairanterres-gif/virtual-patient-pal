@@ -23,13 +23,19 @@ const orderId = (s: TheoState) => s.orders[s.orders.length - 1]!.id;
 
 function completeOxygen(atSec = 10): TheoAction[] {
   return [
-    { type: "ordem", atSec, raw: "ofertar oxigênio por cateter nasal a 3 L/min, alvo saturação 94%" },
+    {
+      type: "ordem",
+      atSec,
+      raw: "ofertar oxigênio por cateter nasal a 3 L/min, alvo saturação 94%",
+    },
   ];
 }
 
 describe("vazamento de informação pelos atores", () => {
   it("Théo não revela dado objetivo mesmo com IDs válidos", () => {
-    const v = validateActorReply("theo", "Minha saturação está em 89% e tenho sibilância.", ["t-peito"]);
+    const v = validateActorReply("theo", "Minha saturação está em 89% e tenho sibilância.", [
+      "t-peito",
+    ]);
     expect(v.ok).toBe(false);
     expect(v.reply).toMatch(/não responde|Théo/);
   });
@@ -73,7 +79,9 @@ describe("completude da ordem depende da intervenção", () => {
     expect(missingFields("medicamento", "prednisolona", { dose: "20 mg" })).toEqual([
       "via de administração",
     ]);
-    expect(missingFields("medicamento", "prednisolona", { dose: "20 mg", via: "via oral" })).toEqual([]);
+    expect(
+      missingFields("medicamento", "prednisolona", { dose: "20 mg", via: "via oral" }),
+    ).toEqual([]);
   });
 
   it("ordem incompleta não é executada nem produz efeito", () => {
@@ -85,7 +93,12 @@ describe("completude da ordem depende da intervenção", () => {
 
   it("esclarecimento completa a ordem sem executá-la", () => {
     let s = run([{ type: "ordem", atSec: 10, raw: "fazer salbutamol" }]);
-    s = applyAction(s, { type: "esclarecer", atSec: 20, orderId: orderId(s), raw: "10 gotas em nebulização" });
+    s = applyAction(s, {
+      type: "esclarecer",
+      atSec: 20,
+      orderId: orderId(s),
+      raw: "10 gotas em nebulização",
+    });
     expect(s.orders[0]!.status).toBe("aguardando_confirmacao");
     s = advanceTo(s, 500);
     expect(s.orders[0]!.status).toBe("aguardando_confirmacao");
@@ -174,7 +187,14 @@ describe("relógio e precedência", () => {
 
   it("o mesmo log de ações sempre produz o mesmo estado final", () => {
     const script = (): TheoAction[] => [
-      { type: "fala", atSec: 5, actor: "mae", question: "o que aconteceu?", reply: "Começou ontem.", grounded: true },
+      {
+        type: "fala",
+        atSec: 5,
+        actor: "mae",
+        question: "o que aconteceu?",
+        reply: "Começou ontem.",
+        grounded: true,
+      },
       { type: "exame", atSec: 30, raw: "auscultar o tórax" },
       { type: "ordem", atSec: 60, raw: "oxigênio por máscara facial a 6 L/min" },
       { type: "confirmar", atSec: 70, orderId: "o1" },
@@ -195,11 +215,16 @@ describe("transferência congela o encontro", () => {
       type: "transferir",
       atSec: 120,
       destino: "Dra. Helena, pediatra plantonista",
-      passagem: "Criança de 6 anos com dificuldade respiratória, avaliada e monitorizada, aguardando conduta.",
+      passagem:
+        "Criança de 6 anos com dificuldade respiratória, avaliada e monitorizada, aguardando conduta.",
     });
     const frozenAt = { ...s.vitals };
     const logLen = s.log.length;
-    let after = applyAction(s, { type: "ordem", atSec: 200, raw: "oxigênio por cateter nasal a 3 L/min" });
+    let after = applyAction(s, {
+      type: "ordem",
+      atSec: 200,
+      raw: "oxigênio por cateter nasal a 3 L/min",
+    });
     after = applyAction(after, { type: "exame", atSec: 300, raw: "auscultar" });
     after = advanceTo(after, 1200);
     expect(after.frozen).toBe(true);
@@ -212,7 +237,14 @@ describe("transferência congela o encontro", () => {
 describe("debrief derivado exclusivamente do log", () => {
   it("usa apenas eventos registrados, sem nota numérica", () => {
     let s = run([
-      { type: "fala", atSec: 5, actor: "mae", question: "história?", reply: "Começou ontem.", grounded: true },
+      {
+        type: "fala",
+        atSec: 5,
+        actor: "mae",
+        question: "história?",
+        reply: "Começou ontem.",
+        grounded: true,
+      },
       { type: "exame", atSec: 30, raw: "auscultar o tórax" },
       { type: "ordem", atSec: 60, raw: "oxigênio por cateter nasal a 3 L/min" },
       { type: "confirmar", atSec: 70, orderId: "o1" },

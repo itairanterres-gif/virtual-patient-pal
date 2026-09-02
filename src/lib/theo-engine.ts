@@ -57,8 +57,8 @@ export const WHEEZE_LABEL: Record<Wheeze, string> = {
   silencio: "silêncio auscultatório",
 };
 
-const better = <T,>(scale: T[], v: T, steps = 1): T => scale[Math.max(0, scale.indexOf(v) - steps)]!;
-const worse = <T,>(scale: T[], v: T, steps = 1): T =>
+const better = <T>(scale: T[], v: T, steps = 1): T => scale[Math.max(0, scale.indexOf(v) - steps)]!;
+const worse = <T>(scale: T[], v: T, steps = 1): T =>
   scale[Math.min(scale.length - 1, scale.indexOf(v) + steps)]!;
 
 export type Vitals = {
@@ -97,12 +97,7 @@ export type CausalEvent = {
 };
 
 export type OrderKind =
-  | "oxigenio"
-  | "medicamento"
-  | "exame"
-  | "monitorizacao"
-  | "acesso"
-  | "posicionamento";
+  "oxigenio" | "medicamento" | "exame" | "monitorizacao" | "acesso" | "posicionamento";
 
 export type Drug = "salbutamol" | "ipratropio" | "prednisolona";
 
@@ -207,19 +202,39 @@ const clone = (s: TheoState): TheoState => ({
 
 const oxygenActiveAt = (s: TheoState, sec: number) =>
   s.orders.some(
-    (o) => o.kind === "oxigenio" && o.status === "concluida" && o.effectSec !== undefined && o.effectSec <= sec,
+    (o) =>
+      o.kind === "oxigenio" &&
+      o.status === "concluida" &&
+      o.effectSec !== undefined &&
+      o.effectSec <= sec,
   );
 
 const drugEffectiveAt = (s: TheoState, drug: Drug, sec: number) =>
   s.orders.some(
-    (o) => o.drug === drug && o.status === "concluida" && o.effectSec !== undefined && o.effectSec <= sec,
+    (o) =>
+      o.drug === drug &&
+      o.status === "concluida" &&
+      o.effectSec !== undefined &&
+      o.effectSec <= sec,
   );
 
 function latencies(o: Order) {
-  if (o.kind === "oxigenio") return { prep: theoLatency.oxygenPrep, exec: theoLatency.oxygenExec, onset: theoLatency.oxygenOnset };
-  if (o.drug === "prednisolona") return { prep: theoLatency.oralPrep, exec: theoLatency.oralExec, onset: 0 };
-  if (o.drug) return { prep: theoLatency.inhaledPrep, exec: theoLatency.inhaledExec, onset: theoLatency.inhaledOnset };
-  if (o.kind === "exame") return { prep: theoLatency.genericPrep, exec: theoLatency.genericExec, onset: 0 };
+  if (o.kind === "oxigenio")
+    return {
+      prep: theoLatency.oxygenPrep,
+      exec: theoLatency.oxygenExec,
+      onset: theoLatency.oxygenOnset,
+    };
+  if (o.drug === "prednisolona")
+    return { prep: theoLatency.oralPrep, exec: theoLatency.oralExec, onset: 0 };
+  if (o.drug)
+    return {
+      prep: theoLatency.inhaledPrep,
+      exec: theoLatency.inhaledExec,
+      onset: theoLatency.inhaledOnset,
+    };
+  if (o.kind === "exame")
+    return { prep: theoLatency.genericPrep, exec: theoLatency.genericExec, onset: 0 };
   return { prep: theoLatency.genericPrep, exec: theoLatency.genericExec, onset: 0 };
 }
 
@@ -235,11 +250,24 @@ export function advanceTo(state: TheoState, targetSec: number): TheoState {
     // 1) transições de ordens (ordem de criação)
     for (const o of s.orders) {
       const { prep, exec, onset } = latencies(o);
-      if (o.status === "preparo" && o.confirmedAtSec !== undefined && sec >= o.confirmedAtSec + prep) {
+      if (
+        o.status === "preparo" &&
+        o.confirmedAtSec !== undefined &&
+        sec >= o.confirmedAtSec + prep
+      ) {
         o.status = "execucao";
         o.execStartSec = sec;
-        push(s, { type: "execucao", label: `Execução iniciada — ${o.label}`, orderId: o.id, detail: describeFields(o) });
-      } else if (o.status === "execucao" && o.execStartSec !== undefined && sec >= o.execStartSec + exec) {
+        push(s, {
+          type: "execucao",
+          label: `Execução iniciada — ${o.label}`,
+          orderId: o.id,
+          detail: describeFields(o),
+        });
+      } else if (
+        o.status === "execucao" &&
+        o.execStartSec !== undefined &&
+        sec >= o.execStartSec + exec
+      ) {
         o.status = "concluida";
         o.doneSec = sec;
         o.effectSec = sec + onset;
@@ -252,7 +280,8 @@ export function advanceTo(state: TheoState, targetSec: number): TheoState {
           push(s, {
             type: "efeito",
             label: "Corticoide administrado — sem melhora clínica aguda",
-            detail: "Efeito anti-inflamatório esperado apenas em horas; não altera o quadro imediato.",
+            detail:
+              "Efeito anti-inflamatório esperado apenas em horas; não altera o quadro imediato.",
             orderId: o.id,
           });
         }
@@ -264,13 +293,24 @@ export function advanceTo(state: TheoState, targetSec: number): TheoState {
         if (o.kind === "oxigenio") {
           if (t === 0) {
             s.vitals.oximeterSignal = "bom";
-            push(s, { type: "efeito", label: "Oxigênio em uso — sinal do oxímetro estabilizado", orderId: o.id, tone: "normal" });
+            push(s, {
+              type: "efeito",
+              label: "Oxigênio em uso — sinal do oxímetro estabilizado",
+              orderId: o.id,
+              tone: "normal",
+            });
           }
           if (t > 0 && t % 10 === 0 && s.vitals.spo2 < 96) {
             s.vitals.spo2 = Math.min(96, s.vitals.spo2 + 1);
             if (s.vitals.spo2 === 96 || s.vitals.spo2 === 94)
-              push(s, { type: "efeito", label: `SpO₂ em ${s.vitals.spo2}% com oxigênio`, orderId: o.id, tone: "normal" });
-            if (s.vitals.spo2 >= 94 && s.vitals.speech === "palavras") s.vitals.speech = "frases_curtas";
+              push(s, {
+                type: "efeito",
+                label: `SpO₂ em ${s.vitals.spo2}% com oxigênio`,
+                orderId: o.id,
+                tone: "normal",
+              });
+            if (s.vitals.spo2 >= 94 && s.vitals.speech === "palavras")
+              s.vitals.speech = "frases_curtas";
           }
         }
         if (o.drug === "salbutamol" || o.drug === "ipratropio") {
@@ -314,13 +354,23 @@ export function advanceTo(state: TheoState, targetSec: number): TheoState {
         for (const id of o.resultFactIds ?? []) {
           if (!s.revealedObjective.includes(id)) s.revealedObjective.push(id);
           const f = theoObjectiveFacts.find((x) => x.id === id);
-          if (f) push(s, { type: "observacao", label: `Resultado — ${f.label}`, detail: f.content, orderId: o.id });
+          if (f)
+            push(s, {
+              type: "observacao",
+              label: `Resultado — ${f.label}`,
+              detail: f.content,
+              orderId: o.id,
+            });
         }
       }
     }
 
     // 3) eventos independentes
-    if (sec === theoTimeline.hypoxemiaAt && !oxygenActiveAt(s, sec) && !s.triggered.includes("hipoxemia")) {
+    if (
+      sec === theoTimeline.hypoxemiaAt &&
+      !oxygenActiveAt(s, sec) &&
+      !s.triggered.includes("hipoxemia")
+    ) {
       s.triggered.push("hipoxemia");
       s.vitals.spo2 = Math.min(s.vitals.spo2, 89);
       s.vitals.speech = worse(SPEECH, "frases_curtas");
@@ -332,7 +382,11 @@ export function advanceTo(state: TheoState, targetSec: number): TheoState {
         tone: "crit",
       });
     }
-    if (sec === theoTimeline.criticalEffortAt && !drugEffectiveAt(s, "salbutamol", sec) && !s.triggered.includes("esforco")) {
+    if (
+      sec === theoTimeline.criticalEffortAt &&
+      !drugEffectiveAt(s, "salbutamol", sec) &&
+      !s.triggered.includes("esforco")
+    ) {
       s.triggered.push("esforco");
       s.vitals.effort = "critico";
       s.vitals.airEntry = "criticamente_reduzida";
@@ -340,7 +394,8 @@ export function advanceTo(state: TheoState, targetSec: number): TheoState {
       push(s, {
         type: "evento_independente",
         label: "Deterioração — esforço crítico",
-        detail: "Esforço respiratório crítico com entrada de ar criticamente reduzida e silêncio auscultatório.",
+        detail:
+          "Esforço respiratório crítico com entrada de ar criticamente reduzida e silêncio auscultatório.",
         tone: "crit",
       });
     }
@@ -387,7 +442,10 @@ export type Intent = {
 };
 
 const norm = (s: string) =>
-  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
 function parseFields(raw: string): OrderFields {
   const t = norm(raw);
@@ -399,13 +457,15 @@ function parseFields(raw: string): OrderFields {
   const fio2 = t.match(/(\d+)\s*%/);
   if (fio2 && !f.flow) f.flow = `FiO₂ ${fio2[1]}%`;
   if (/cateter|catete|otica|óptica|nasal/.test(t)) f.device = "cateter nasal";
-  if (/mascara com reservatorio|nao reinalante|reservatorio/.test(t)) f.device = "máscara com reservatório";
+  if (/mascara com reservatorio|nao reinalante|reservatorio/.test(t))
+    f.device = "máscara com reservatório";
   else if (/mascara|venturi/.test(t)) f.device = f.device ?? "máscara facial";
   if (/espacador|espaçador|aerocamara|aerocâmara|spacer/.test(t)) f.device = "espaçador";
   if (/nebuliza|inalacao|inalação|nebulis/.test(t)) f.device = "nebulização";
   if (/\b(vo|via oral|oral|boca)\b/.test(t)) f.via = "via oral";
   if (/\b(ev|iv|endovenos|intravenos)/.test(t)) f.via = "endovenosa";
-  if (/inalat|nebuliza|espacador|espaçador|bombinha|puff|jato/.test(t)) f.via = f.via ?? "inalatória";
+  if (/inalat|nebuliza|espacador|espaçador|bombinha|puff|jato/.test(t))
+    f.via = f.via ?? "inalatória";
   const target = t.match(/(alvo|manter|ate|até)\s*(spo2|saturacao|sat)?\s*(?:de\s*)?(\d{2})\s*%/);
   if (target) f.target = `alvo SpO₂ ≥ ${target[3]}%`;
   return f;
@@ -420,7 +480,11 @@ const TEST_MAP: { re: RegExp; key: string }[] = [
 function testFactsFor(raw: string): ObjectiveFact[] {
   const t = norm(raw);
   const keys = TEST_MAP.filter((m) => m.re.test(t)).map((m) => m.key);
-  const ids: Record<string, string> = { radiografia: "o-rx", gasometria: "o-gaso", hemograma: "o-hemograma" };
+  const ids: Record<string, string> = {
+    radiografia: "o-rx",
+    gasometria: "o-gaso",
+    hemograma: "o-hemograma",
+  };
   return keys.flatMap((k) => {
     const f = theoObjectiveFacts.find((x) => x.id === ids[k]);
     return f ? [f] : [];
@@ -431,12 +495,24 @@ function testFactsFor(raw: string): ObjectiveFact[] {
 export function parseIntent(raw: string): Intent {
   const t = norm(raw).trim();
   const fields = parseFields(raw);
-  const mk = (kind: IntentKind, extra: Partial<Intent> = {}): Intent => ({ kind, raw, fields, ...extra });
+  const mk = (kind: IntentKind, extra: Partial<Intent> = {}): Intent => ({
+    kind,
+    raw,
+    fields,
+    ...extra,
+  });
 
   if (!t) return mk("desconhecido");
-  if (/transferir|transferencia|passar o caso|passagem de caso|encaminhar|acionar pediatra|chamar pediatra|entregar o cuidado/.test(t))
+  if (
+    /transferir|transferencia|passar o caso|passagem de caso|encaminhar|acionar pediatra|chamar pediatra|entregar o cuidado/.test(
+      t,
+    )
+  )
     return mk("transferir");
-  const actionVerb = /ofert|administr|inici|coloc|instal|prescrev|aplicar|\bdar\b|\bfazer\b|\busar\b|puff|jato|gotas|l\/min/.test(t);
+  const actionVerb =
+    /ofert|administr|inici|coloc|instal|prescrev|aplicar|\bdar\b|\bfazer\b|\busar\b|puff|jato|gotas|l\/min/.test(
+      t,
+    );
   if (
     /oximetr|saturacao|spo2|sat do|checar o monitor|ver o monitor|monitor/.test(t) &&
     !/instalar monitor|monitorizacao|monitorizar/.test(t) &&
@@ -465,9 +541,14 @@ export function parseIntent(raw: string): Intent {
     return mk("ordem", { orderKind: "medicamento", drug: "prednisolona" });
   if (/solicit|pedir|exame|radiograf|raio|gasometr|hemograma/.test(t)) {
     const test = TEST_MAP.find((m) => m.re.test(t));
-    return mk("ordem", { orderKind: "exame", fields: { ...fields, test: test ? test.key : undefined } });
+    return mk("ordem", {
+      orderKind: "exame",
+      fields: { ...fields, test: test ? test.key : undefined },
+    });
   }
-  if (/examinar|exame fisico|auscult|palpar|inspecionar|olhar|avaliar|verificar|ver o|checar/.test(t))
+  if (
+    /examinar|exame fisico|auscult|palpar|inspecionar|olhar|avaliar|verificar|ver o|checar/.test(t)
+  )
     return mk("exame");
   if (/sentar|posicionar|colo da mae|posicao|acalmar|tranquilizar/.test(t))
     return mk("ordem", { orderKind: "posicionamento" });
@@ -478,7 +559,8 @@ export function parseIntent(raw: string): Intent {
 export function missingFields(kind: OrderKind, drug: Drug | undefined, f: OrderFields): string[] {
   const missing: string[] = [];
   if (kind === "oxigenio") {
-    if (!f.device) missing.push("dispositivo (cateter nasal, máscara facial, máscara com reservatório)");
+    if (!f.device)
+      missing.push("dispositivo (cateter nasal, máscara facial, máscara com reservatório)");
     if (!f.flow) missing.push("fluxo em L/min ou concentração (FiO₂)");
     return missing;
   }
@@ -497,13 +579,19 @@ export function missingFields(kind: OrderKind, drug: Drug | undefined, f: OrderF
 
 function describeFields(o: Order) {
   const f = o.fields;
-  return [f.dose, f.via, f.device, f.flow, f.target, f.test].filter(Boolean).join(" · ") || undefined;
+  return (
+    [f.dose, f.via, f.device, f.flow, f.target, f.test].filter(Boolean).join(" · ") || undefined
+  );
 }
 
 export function orderLabel(kind: OrderKind, drug?: Drug, fields?: OrderFields) {
   if (kind === "oxigenio") return "Oxigenoterapia";
   if (kind === "medicamento")
-    return drug === "salbutamol" ? "Salbutamol inalatório" : drug === "ipratropio" ? "Brometo de ipratrópio" : "Prednisolona";
+    return drug === "salbutamol"
+      ? "Salbutamol inalatório"
+      : drug === "ipratropio"
+        ? "Brometo de ipratrópio"
+        : "Prednisolona";
   if (kind === "exame") return `Exame complementar (${fields?.test ?? "a definir"})`;
   if (kind === "monitorizacao") return "Monitorização contínua";
   if (kind === "acesso") return "Acesso venoso periférico";
@@ -513,7 +601,14 @@ export function orderLabel(kind: OrderKind, drug?: Drug, fields?: OrderFields) {
 // -------------------------------------------------------------------- ações
 
 export type TheoAction =
-  | { type: "fala"; atSec: number; actor: "theo" | "mae" | "equipe"; question: string; reply: string; grounded: boolean }
+  | {
+      type: "fala";
+      atSec: number;
+      actor: "theo" | "mae" | "equipe";
+      question: string;
+      reply: string;
+      grounded: boolean;
+    }
   | { type: "exame"; atSec: number; raw: string }
   | { type: "monitor"; atSec: number }
   | { type: "reavaliar"; atSec: number }
@@ -560,7 +655,8 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
       const matched = theoObjectiveFacts.filter(
         (f) => f.source === "exame_fisico" && f.keywords.some((k) => t.includes(norm(k))),
       );
-      const found = matched.length > 0 ? matched : theoObjectiveFacts.filter((f) => f.id === "o-geral");
+      const found =
+        matched.length > 0 ? matched : theoObjectiveFacts.filter((f) => f.id === "o-geral");
       const decision = push(s, { type: "decisao", label: "Exame físico", detail: action.raw });
       for (const f of found) {
         if (!s.revealedObjective.includes(f.id)) s.revealedObjective.push(f.id);
@@ -575,7 +671,12 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
     }
     case "monitor": {
       const d = push(s, { type: "decisao", label: "Verificação do monitor" });
-      push(s, { type: "observacao", label: "Monitor", detail: monitorSnapshot(s.vitals), causeId: d.id });
+      push(s, {
+        type: "observacao",
+        label: "Monitor",
+        detail: monitorSnapshot(s.vitals),
+        causeId: d.id,
+      });
       return s;
     }
     case "reavaliar": {
@@ -589,7 +690,10 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
       return advanceTo(s, s.clockSec + theoLatency.examDuration);
     }
     case "aguardar": {
-      push(s, { type: "decisao", label: `Aguardar ${Math.round(action.seconds / 60)} min de observação` });
+      push(s, {
+        type: "decisao",
+        label: `Aguardar ${Math.round(action.seconds / 60)} min de observação`,
+      });
       return advanceTo(s, s.clockSec + action.seconds);
     }
     case "ordem": {
@@ -598,7 +702,8 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
         push(s, {
           type: "esclarecimento",
           label: "Equipe não compreendeu a solicitação",
-          detail: "Descreva a ação clínica desejada (por exemplo, ofertar oxigênio, administrar medicação, solicitar exame).",
+          detail:
+            "Descreva a ação clínica desejada (por exemplo, ofertar oxigênio, administrar medicação, solicitar exame).",
           tone: "warn",
         });
         return s;
@@ -617,7 +722,12 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
         createdAtSec: s.clockSec,
       };
       s.orders.push(order);
-      const d = push(s, { type: "decisao", label: `Proposta — ${order.label}`, detail: action.raw, orderId: order.id });
+      const d = push(s, {
+        type: "decisao",
+        label: `Proposta — ${order.label}`,
+        detail: action.raw,
+        orderId: order.id,
+      });
       if (missing.length > 0) {
         push(s, {
           type: "esclarecimento",
@@ -690,7 +800,8 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
 }
 
 function contextualFinding(f: ObjectiveFact, v: Vitals) {
-  if (f.id === "o-ausculta") return `${WHEEZE_LABEL[v.wheeze]}, ${AIR_LABEL[v.airEntry]}, tempo expiratório prolongado`;
+  if (f.id === "o-ausculta")
+    return `${WHEEZE_LABEL[v.wheeze]}, ${AIR_LABEL[v.airEntry]}, tempo expiratório prolongado`;
   if (f.id === "o-esforco") return `${EFFORT_LABEL[v.effort]}: ${f.content}`;
   if (f.id === "o-geral") return `${f.content}; ${SPEECH_LABEL[v.speech]}`;
   return f.content;
@@ -728,20 +839,27 @@ const ev = (s: TheoState, pred: (e: CausalEvent) => boolean) => s.log.filter(pre
 /** Debrief 100% derivado do log: sem nota, sem LLM, sem julgar raciocínio livre. */
 export function buildDebrief(state: TheoState): Debrief {
   const itens: DebriefItem[] = [];
-  const fmt = (e: CausalEvent) => `${clockLabel(e.atSec)} — ${e.label}${e.detail ? `: ${e.detail}` : ""}`;
+  const fmt = (e: CausalEvent) =>
+    `${clockLabel(e.atSec)} — ${e.label}${e.detail ? `: ${e.detail}` : ""}`;
 
   const falasTheo = ev(state, (e) => e.type === "comunicacao" && e.actor === "theo");
   const falasMae = ev(state, (e) => e.type === "comunicacao" && e.actor === "mae");
   itens.push({
     id: "comunicacao-crianca",
     titulo: "Comunicação com a criança",
-    status: falasTheo.length >= 4 ? "demonstrado" : falasTheo.length > 0 ? "parcialmente" : "nao_observado",
+    status:
+      falasTheo.length >= 4
+        ? "demonstrado"
+        : falasTheo.length > 0
+          ? "parcialmente"
+          : "nao_observado",
     evidencias: falasTheo.slice(0, 4).map(fmt),
   });
   itens.push({
     id: "comunicacao-acompanhante",
     titulo: "Coleta de história com o acompanhante",
-    status: falasMae.length >= 4 ? "demonstrado" : falasMae.length > 0 ? "parcialmente" : "nao_observado",
+    status:
+      falasMae.length >= 4 ? "demonstrado" : falasMae.length > 0 ? "parcialmente" : "nao_observado",
     evidencias: falasMae.slice(0, 4).map(fmt),
   });
 
@@ -751,7 +869,11 @@ export function buildDebrief(state: TheoState): Debrief {
     id: "avaliacao-inicial",
     titulo: "Avaliação clínica objetiva (exame físico e monitor)",
     status:
-      exames.length > 0 && monitor.length > 0 ? "demonstrado" : exames.length + monitor.length > 0 ? "parcialmente" : "nao_observado",
+      exames.length > 0 && monitor.length > 0
+        ? "demonstrado"
+        : exames.length + monitor.length > 0
+          ? "parcialmente"
+          : "nao_observado",
     evidencias: [...exames, ...monitor].slice(0, 5).map(fmt),
   });
 
@@ -761,7 +883,11 @@ export function buildDebrief(state: TheoState): Debrief {
     id: "oxigenio",
     titulo: "Oferta de oxigênio diante da hipoxemia",
     status: o2 ? (hipoxemia ? "parcialmente" : "demonstrado") : "nao_observado",
-    evidencias: o2 ? [`${clockLabel(o2.doneSec ?? o2.createdAtSec)} — ${o2.label} (${describeFields(o2) ?? "—"})`] : [],
+    evidencias: o2
+      ? [
+          `${clockLabel(o2.doneSec ?? o2.createdAtSec)} — ${o2.label} (${describeFields(o2) ?? "—"})`,
+        ]
+      : [],
     consequencia: hipoxemia
       ? `Sem oxigênio efetivo até ${clockLabel(hipoxemia.atSec)}, a SpO₂ caiu para 89% e a fala reduziu a palavras isoladas.`
       : o2
@@ -775,7 +901,11 @@ export function buildDebrief(state: TheoState): Debrief {
     id: "broncodilatador",
     titulo: "Broncodilatador inalatório em tempo hábil",
     status: broncho ? (esforco ? "parcialmente" : "demonstrado") : "nao_observado",
-    evidencias: broncho ? [`${clockLabel(broncho.doneSec ?? broncho.createdAtSec)} — ${broncho.label} (${describeFields(broncho) ?? "—"})`] : [],
+    evidencias: broncho
+      ? [
+          `${clockLabel(broncho.doneSec ?? broncho.createdAtSec)} — ${broncho.label} (${describeFields(broncho) ?? "—"})`,
+        ]
+      : [],
     consequencia: esforco
       ? `Sem broncodilatador efetivo até ${clockLabel(esforco.atSec)}, o esforço tornou-se crítico com silêncio auscultatório.`
       : broncho
@@ -783,11 +913,16 @@ export function buildDebrief(state: TheoState): Debrief {
         : "Nenhum broncodilatador foi administrado.",
   });
 
-  const esclarecimentos = ev(state, (e) => e.type === "esclarecimento" && (e.tone === "warn"));
+  const esclarecimentos = ev(state, (e) => e.type === "esclarecimento" && e.tone === "warn");
   itens.push({
     id: "completude",
     titulo: "Completude da prescrição (dose, via, dispositivo, alvo)",
-    status: state.orders.length === 0 ? "nao_observado" : esclarecimentos.length === 0 ? "demonstrado" : "parcialmente",
+    status:
+      state.orders.length === 0
+        ? "nao_observado"
+        : esclarecimentos.length === 0
+          ? "demonstrado"
+          : "parcialmente",
     evidencias: esclarecimentos.slice(0, 4).map(fmt),
     consequencia:
       esclarecimentos.length > 0
@@ -797,7 +932,9 @@ export function buildDebrief(state: TheoState): Debrief {
 
   const reaval = ev(state, (e) => e.type === "decisao" && e.label === "Reavaliação clínica");
   const primeiraIntervencao = state.orders.find((o) => o.doneSec !== undefined)?.doneSec;
-  const reavalDepois = reaval.filter((e) => primeiraIntervencao !== undefined && e.atSec > primeiraIntervencao);
+  const reavalDepois = reaval.filter(
+    (e) => primeiraIntervencao !== undefined && e.atSec > primeiraIntervencao,
+  );
   itens.push({
     id: "reavaliacao",
     titulo: "Reavaliação após intervenção",
@@ -809,13 +946,19 @@ export function buildDebrief(state: TheoState): Debrief {
           : "nao_observado",
     evidencias: reavalDepois.slice(0, 3).map(fmt),
     consequencia:
-      primeiraIntervencao === undefined ? "Não houve intervenção concluída para reavaliar." : undefined,
+      primeiraIntervencao === undefined
+        ? "Não houve intervenção concluída para reavaliar."
+        : undefined,
   });
 
   itens.push({
     id: "seguranca",
     titulo: "Estabilização antes do limite de segurança",
-    status: state.safetyEscalation ? "nao_observado" : state.clockSec >= theoTimeline.safetyEscalationAt ? "demonstrado" : "nao_avaliavel",
+    status: state.safetyEscalation
+      ? "nao_observado"
+      : state.clockSec >= theoTimeline.safetyEscalationAt
+        ? "demonstrado"
+        : "nao_avaliavel",
     evidencias: state.log.filter((e) => e.label === "Escalonamento de segurança acionado").map(fmt),
     consequencia: state.safetyEscalation
       ? "A instabilidade persistiu até 14 minutos e a equipe teve de acionar o escalonamento de segurança."
@@ -833,7 +976,9 @@ export function buildDebrief(state: TheoState): Debrief {
         : "parcialmente"
       : "nao_observado",
     evidencias: state.transfer
-      ? [`${clockLabel(state.transfer.atSec)} — ${state.transfer.destino}: ${state.transfer.passagem || "sem passagem registrada"}`]
+      ? [
+          `${clockLabel(state.transfer.atSec)} — ${state.transfer.destino}: ${state.transfer.passagem || "sem passagem registrada"}`,
+        ]
       : [],
   });
 

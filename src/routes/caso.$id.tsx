@@ -25,7 +25,9 @@ export const Route = createFileRoute("/caso/$id")({
   },
   head: ({ loaderData }) => {
     const c = loaderData?.clinicalCase;
-    const title = c ? `${c.patientName}, ${c.age}a — ${c.chiefComplaint} | Vitalis·Sim` : "Caso clínico | Vitalis·Sim";
+    const title = c
+      ? `${c.patientName}, ${c.age}a — ${c.chiefComplaint} | Vitalis·Sim`
+      : "Caso clínico | Vitalis·Sim";
     const description = c
       ? `Simulação de ${c.specialty.toLowerCase()} em ${c.environment.toLowerCase()}: converse com o paciente virtual, avalie sinais vitais, exames e defina a conduta.`
       : "Simulação clínica com paciente virtual.";
@@ -52,7 +54,13 @@ function CaseRoute() {
 
 type ChatMsg = { role: "student" | "patient" | "alert"; content: string; at: string };
 type Feedback = { comentarios: Record<string, string>; resumo: string; melhorias: string[] };
-type Pending = { dueAtSec: number; factIds: string[]; label: string; refId: string; source: "exame_fisico" | "exame_solicitado" };
+type Pending = {
+  dueAtSec: number;
+  factIds: string[];
+  label: string;
+  refId: string;
+  source: "exame_fisico" | "exame_solicitado";
+};
 
 const TABS = ["Anamnese", "Exame físico", "Exames", "Condutas"] as const;
 
@@ -107,7 +115,10 @@ function Cockpit() {
     if (due.length === 0) return;
     setQueue((q) => q.filter((item) => item.dueAtSec > elapsed));
     for (const item of due) {
-      const facts = item.factIds.flatMap((id) => { const f = factById[id]; return f ? [f] : []; });
+      const facts = item.factIds.flatMap((id) => {
+        const f = factById[id];
+        return f ? [f] : [];
+      });
       setRevealedFacts((r) => [...r, ...item.factIds.filter((id) => !r.includes(id))]);
       for (const f of facts) {
         pushEvent(
@@ -151,7 +162,11 @@ function Cockpit() {
       if (res.revealedFactIds.length) {
         setRevealedFacts((r) => [...r, ...res.revealedFactIds.filter((id) => !r.includes(id))]);
         pushEvent(
-          makeEvent("resposta", `Informação obtida: ${res.revealedFactIds.map((id) => factById[id]?.label ?? id).join(", ")}`, now),
+          makeEvent(
+            "resposta",
+            `Informação obtida: ${res.revealedFactIds.map((id) => factById[id]?.label ?? id).join(", ")}`,
+            now,
+          ),
         );
       }
     } catch {
@@ -167,17 +182,31 @@ function Cockpit() {
     pushEvent(makeEvent("exame_fisico", `Exame físico: ${action.label}`, elapsed, { refId: id }));
     setQueue((q) => [
       ...q,
-      { dueAtSec: elapsed + Math.max(1, Math.round(action.durationSec / 10)), factIds: action.reveals, label: action.label, refId: id, source: "exame_fisico" },
+      {
+        dueAtSec: elapsed + Math.max(1, Math.round(action.durationSec / 10)),
+        factIds: action.reveals,
+        label: action.label,
+        refId: id,
+        source: "exame_fisico",
+      },
     ]);
   }
 
   function orderTest(id: string) {
     const test = engineCase.tests.find((t) => t.id === id);
     if (!test || events.some((e) => e.kind === "exame_solicitado" && e.refId === id)) return;
-    pushEvent(makeEvent("exame_solicitado", `Exame solicitado: ${test.label}`, elapsed, { refId: id }));
+    pushEvent(
+      makeEvent("exame_solicitado", `Exame solicitado: ${test.label}`, elapsed, { refId: id }),
+    );
     setQueue((q) => [
       ...q,
-      { dueAtSec: elapsed + Math.max(1, Math.round(test.turnaroundSec / 5)), factIds: test.reveals, label: test.label, refId: id, source: "exame_solicitado" },
+      {
+        dueAtSec: elapsed + Math.max(1, Math.round(test.turnaroundSec / 5)),
+        factIds: test.reveals,
+        label: test.label,
+        refId: id,
+        source: "exame_solicitado",
+      },
     ]);
   }
 
@@ -219,7 +248,9 @@ function Cockpit() {
             met: s.met.map((m) => m.criterion.label),
             missed: s.missed.map((m) => m.criterion.label),
           })),
-          timeline: events.map((e) => `${e.clock} · ${e.kind}: ${e.label}${e.detail ? ` — ${e.detail}` : ""}`),
+          timeline: events.map(
+            (e) => `${e.clock} · ${e.kind}: ${e.label}${e.detail ? ` — ${e.detail}` : ""}`,
+          ),
         },
       });
       setFeedback(res as Feedback);
@@ -298,7 +329,9 @@ function Cockpit() {
                 <p
                   className={`mt-1 font-mono text-[9px] ${v.status === "normal" ? "text-faint" : statusText(v.status)}`}
                 >
-                  {v.status === "normal" ? v.unit : `${v.status === "crit" ? "crítico" : "atenção"} ${v.unit}`}
+                  {v.status === "normal"
+                    ? v.unit
+                    : `${v.status === "crit" ? "crítico" : "atenção"} ${v.unit}`}
                 </p>
               </div>
             ))}
@@ -383,7 +416,9 @@ function Cockpit() {
                     className={`mt-1 size-2 shrink-0 rounded-full ${e.status === "crit" ? "bg-crit" : e.status === "warn" ? "bg-warn" : "bg-normal"}`}
                   />
                   <p className="text-[11px]">{e.label}</p>
-                  <span className="ml-auto shrink-0 font-mono text-[10px] text-faint">{e.clock}</span>
+                  <span className="ml-auto shrink-0 font-mono text-[10px] text-faint">
+                    {e.clock}
+                  </span>
                 </div>
               ))}
             </div>
@@ -444,7 +479,9 @@ function Conversa({
           className="size-9 shrink-0 rounded-md object-cover"
         />
         <div className="min-w-0">
-          <p className="truncate text-[12px] font-semibold">Paciente — {clinicalCase.patientName}</p>
+          <p className="truncate text-[12px] font-semibold">
+            Paciente — {clinicalCase.patientName}
+          </p>
           <p className="truncate font-mono text-[10px] text-faint">
             {clinicalCase.age} anos · {clinicalCase.weightKg} kg · {clinicalCase.bed}
           </p>
@@ -548,7 +585,10 @@ function Painel({
         {engineCase.physicalExams.map((p) => {
           const done = events.some((e) => e.kind === "exame_fisico" && e.refId === p.id);
           const waiting = queue.some((q) => q.refId === p.id);
-          const found = p.reveals.flatMap((id) => { const f = factById[id]; return f ? [f] : []; });
+          const found = p.reveals.flatMap((id) => {
+            const f = factById[id];
+            return f ? [f] : [];
+          });
           const shown = p.reveals.some((id) => revealedFacts.includes(id));
           return (
             <button
@@ -565,7 +605,10 @@ function Painel({
               </div>
               {shown &&
                 found.map((f) => (
-                  <p key={f.label} className={`mt-1 font-mono text-[11px] ${statusText(f.status ?? "normal")}`}>
+                  <p
+                    key={f.label}
+                    className={`mt-1 font-mono text-[11px] ${statusText(f.status ?? "normal")}`}
+                  >
                     {f.content}
                   </p>
                 ))}
@@ -584,7 +627,10 @@ function Painel({
       {engineCase.tests.map((t) => {
         const ordered = events.some((e) => e.kind === "exame_solicitado" && e.refId === t.id);
         const waiting = queue.some((q) => q.refId === t.id);
-        const facts = t.reveals.flatMap((id) => { const f = factById[id]; return f ? [f] : []; });
+        const facts = t.reveals.flatMap((id) => {
+          const f = factById[id];
+          return f ? [f] : [];
+        });
         const ready = t.reveals.some((id) => revealedFacts.includes(id));
         return (
           <button
@@ -601,7 +647,10 @@ function Painel({
             </div>
             {ready &&
               facts.map((f) => (
-                <p key={f.label} className={`mt-1 font-mono text-[11px] ${statusText(f.status ?? "normal")}`}>
+                <p
+                  key={f.label}
+                  className={`mt-1 font-mono text-[11px] ${statusText(f.status ?? "normal")}`}
+                >
                   {f.content}
                 </p>
               ))}
@@ -644,7 +693,9 @@ function Avaliacao({
               />
             </div>
             {feedback?.comentarios[d.domain] && (
-              <p className="mt-1 text-[11px] text-pretty text-faint">{feedback.comentarios[d.domain]}</p>
+              <p className="mt-1 text-[11px] text-pretty text-faint">
+                {feedback.comentarios[d.domain]}
+              </p>
             )}
             <ul className="mt-1 space-y-0.5">
               {d.met.map((m) => (

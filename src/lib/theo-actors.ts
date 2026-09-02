@@ -7,12 +7,7 @@
  * resposta determinística segura.
  */
 
-import {
-  forbiddenActorTerms,
-  maeFacts,
-  theoFacts,
-  type ActorFact,
-} from "./case-theo";
+import { forbiddenActorTerms, maeFacts, theoFacts, type ActorFact } from "./case-theo";
 
 export type SpeakingActor = "theo" | "mae";
 
@@ -21,7 +16,10 @@ export function factsForActor(actor: SpeakingActor): ActorFact[] {
 }
 
 const norm = (s: string) =>
-  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
 /** Afirmações sobre o futuro/consequência que o ator não pode fazer. */
 const forbiddenClaimPatterns = [
@@ -109,10 +107,14 @@ export function buildActorPrompt(actor: SpeakingActor): string {
 /** Canal operacional da equipe — determinístico, sem LLM. */
 export function teamReply(question: string): string {
   const t = norm(question);
-  if (/oxig/.test(t)) return "Equipe: temos cateter nasal, máscara facial e máscara com reservatório disponíveis. Informe dispositivo e fluxo.";
-  if (/salbutamol|bombinha|inala|nebuli/.test(t)) return "Equipe: temos salbutamol spray com espaçador e solução para nebulização. Informe a dose e a apresentação.";
-  if (/monitor|oximet/.test(t)) return "Equipe: o monitor está no leito; peça a verificação quando quiser.";
+  if (/oxig/.test(t))
+    return "Equipe: temos cateter nasal, máscara facial e máscara com reservatório disponíveis. Informe dispositivo e fluxo.";
+  if (/salbutamol|bombinha|inala|nebuli/.test(t))
+    return "Equipe: temos salbutamol spray com espaçador e solução para nebulização. Informe a dose e a apresentação.";
+  if (/monitor|oximet/.test(t))
+    return "Equipe: o monitor está no leito; peça a verificação quando quiser.";
   if (/peso/.test(t)) return "Equipe: peso não foi aferido aqui; confirme com a mãe.";
-  if (/exame|raio|gaso|hemograma/.test(t)) return "Equipe: podemos coletar exames; a solicitação precisa dizer qual exame.";
+  if (/exame|raio|gaso|hemograma/.test(t))
+    return "Equipe: podemos coletar exames; a solicitação precisa dizer qual exame.";
   return "Equipe: pronta para executar o que for solicitado — descreva a ação completa.";
 }

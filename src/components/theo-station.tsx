@@ -122,9 +122,19 @@ export function TheoStation() {
       const history = messages
         .slice(-10)
         .filter((m) => m.who === "voce" || m.who === speaker)
-        .map((m) => ({ role: (m.who === "voce" ? "student" : "actor") as "student" | "actor", content: m.text }));
+        .map((m) => ({
+          role: (m.who === "voce" ? "student" : "actor") as "student" | "actor",
+          content: m.text,
+        }));
       const res = await ask({ data: { actor: speaker, question: q, transcript: history } });
-      dispatch({ type: "fala", atSec: 0, actor: speaker, question: q, reply: res.reply, grounded: res.grounded });
+      dispatch({
+        type: "fala",
+        atSec: 0,
+        actor: speaker,
+        question: q,
+        reply: res.reply,
+        grounded: res.grounded,
+      });
       setMessages((m) => [
         ...m,
         { who: speaker, text: res.reply, at: clockLabel(targetSec()), warn: !res.grounded },
@@ -132,7 +142,12 @@ export function TheoStation() {
     } catch {
       setMessages((m) => [
         ...m,
-        { who: "sistema", text: "Falha de comunicação. Tente novamente.", at: clockLabel(targetSec()), warn: true },
+        {
+          who: "sistema",
+          text: "Falha de comunicação. Tente novamente.",
+          at: clockLabel(targetSec()),
+          warn: true,
+        },
       ]);
     } finally {
       setWaiting(false);
@@ -151,7 +166,8 @@ export function TheoStation() {
     if (intent.kind === "exame") dispatch({ type: "exame", atSec: 0, raw });
     else if (intent.kind === "monitor") dispatch({ type: "monitor", atSec: 0 });
     else if (intent.kind === "reavaliar") dispatch({ type: "reavaliar", atSec: 0 });
-    else if (intent.kind === "aguardar") dispatch({ type: "aguardar", atSec: 0, seconds: intent.seconds ?? 120 });
+    else if (intent.kind === "aguardar")
+      dispatch({ type: "aguardar", atSec: 0, seconds: intent.seconds ?? 120 });
     else dispatch({ type: "ordem", atSec: 0, raw, intent });
   }
 
@@ -168,9 +184,15 @@ export function TheoStation() {
           <Link to="/" className="font-mono text-[11px] text-faint hover:text-fg">
             ← casos
           </Link>
-          <img src={patientAvatars["dispneia-crianca"]} alt="Théo R." className="size-9 rounded-full object-cover" />
+          <img
+            src={patientAvatars["dispneia-crianca"]}
+            alt="Théo R."
+            className="size-9 rounded-full object-cover"
+          />
           <div className="min-w-0">
-            <h1 className="truncate text-[13px] font-semibold">Théo R., 6 anos — dificuldade para respirar</h1>
+            <h1 className="truncate text-[13px] font-semibold">
+              Théo R., 6 anos — dificuldade para respirar
+            </h1>
             <p className="font-mono text-[10px] text-faint">
               Pronto-socorro pediátrico · tempo clínico {clockLabel(state.clockSec)}
             </p>
@@ -224,15 +246,21 @@ export function TheoStation() {
                 ))}
                 <span className="ml-auto font-mono text-[10px] text-faint">falando com</span>
               </div>
-              <div ref={chatRef} className="max-h-[46vh] min-h-[180px] space-y-2 overflow-y-auto p-3">
+              <div
+                ref={chatRef}
+                className="max-h-[46vh] min-h-[180px] space-y-2 overflow-y-auto p-3"
+              >
                 {messages.length === 0 && (
                   <p className="text-[12px] text-faint">
-                    Converse livremente com Théo, com a mãe ou com a equipe. Cada um sabe apenas o que
-                    lhe cabe saber.
+                    Converse livremente com Théo, com a mãe ou com a equipe. Cada um sabe apenas o
+                    que lhe cabe saber.
                   </p>
                 )}
                 {messages.map((m, i) => (
-                  <div key={i} className={m.who === "voce" ? "flex justify-end" : "flex justify-start"}>
+                  <div
+                    key={i}
+                    className={m.who === "voce" ? "flex justify-end" : "flex justify-start"}
+                  >
                     <div
                       className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] ring-1 ${
                         m.who === "voce"
@@ -249,7 +277,11 @@ export function TheoStation() {
                     </div>
                   </div>
                 ))}
-                {waiting && <p className="pulse-vital font-mono text-[11px] text-faint">aguardando resposta…</p>}
+                {waiting && (
+                  <p className="pulse-vital font-mono text-[11px] text-faint">
+                    aguardando resposta…
+                  </p>
+                )}
               </div>
               <div className="flex gap-2 border-t border-line p-2">
                 <input
@@ -314,7 +346,9 @@ export function TheoStation() {
                           <div className="mt-1.5 flex gap-2">
                             <input
                               value={clarify[o.id] ?? ""}
-                              onChange={(e) => setClarify((c) => ({ ...c, [o.id]: e.target.value }))}
+                              onChange={(e) =>
+                                setClarify((c) => ({ ...c, [o.id]: e.target.value }))
+                              }
                               placeholder="Complete a ordem…"
                               className="min-w-0 flex-1 rounded-md bg-card px-2 py-1.5 text-[12px] ring-1 ring-line outline-none focus:ring-primary/40"
                             />
@@ -401,12 +435,16 @@ export function TheoStation() {
                           · {e}
                         </p>
                       ))}
-                      {i.consequencia && <p className="mt-0.5 text-[11px] text-pretty">{i.consequencia}</p>}
+                      {i.consequencia && (
+                        <p className="mt-0.5 text-[11px] text-pretty">{i.consequencia}</p>
+                      )}
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 border-t border-line pt-2">
-                  <p className="font-mono text-[10px] text-faint uppercase">Não avaliável automaticamente</p>
+                  <p className="font-mono text-[10px] text-faint uppercase">
+                    Não avaliável automaticamente
+                  </p>
                   {debrief.naoAvaliavel.map((n, i) => (
                     <p key={i} className="mt-1 text-[11px] text-pretty text-faint">
                       → {n}
@@ -427,11 +465,21 @@ export function TheoStation() {
           {/* Monitor sempre visível */}
           <aside className="order-1 space-y-3 lg:order-2">
             <div className="rounded-md bg-card p-3 ring-1 ring-line lg:sticky lg:top-4">
-              <p className="mb-2 font-mono text-[10px] tracking-[0.12em] text-faint uppercase">Monitor</p>
+              <p className="mb-2 font-mono text-[10px] tracking-[0.12em] text-faint uppercase">
+                Monitor
+              </p>
               <div className="grid grid-cols-3 gap-2 lg:grid-cols-3">
-                <Metric label="SpO₂" value={`${v.spo2}%`} tone={v.spo2 >= 94 ? "normal" : v.spo2 >= 90 ? "warn" : "crit"} />
+                <Metric
+                  label="SpO₂"
+                  value={`${v.spo2}%`}
+                  tone={v.spo2 >= 94 ? "normal" : v.spo2 >= 90 ? "warn" : "crit"}
+                />
                 <Metric label="FC" value={`${v.hr}`} tone={v.hr > 150 ? "warn" : "normal"} />
-                <Metric label="FR" value={`${v.rr}`} tone={v.rr > 40 ? "crit" : v.rr > 30 ? "warn" : "normal"} />
+                <Metric
+                  label="FR"
+                  value={`${v.rr}`}
+                  tone={v.rr > 40 ? "crit" : v.rr > 30 ? "warn" : "normal"}
+                />
               </div>
               <ul className="mt-3 space-y-1 font-mono text-[11px]">
                 <li className="text-faint">
@@ -441,13 +489,29 @@ export function TheoStation() {
                   fala: <span className="text-fg">{SPEECH_LABEL[v.speech]}</span>
                 </li>
                 <li className="text-faint">
-                  esforço: <span className={v.effort === "critico" ? "text-crit" : v.effort === "grave" ? "text-warn" : "text-fg"}>{EFFORT_LABEL[v.effort]}</span>
+                  esforço:{" "}
+                  <span
+                    className={
+                      v.effort === "critico"
+                        ? "text-crit"
+                        : v.effort === "grave"
+                          ? "text-warn"
+                          : "text-fg"
+                    }
+                  >
+                    {EFFORT_LABEL[v.effort]}
+                  </span>
                 </li>
                 <li className="text-faint">
                   entrada de ar: <span className="text-fg">{AIR_LABEL[v.airEntry]}</span>
                 </li>
                 <li className="text-faint">
-                  ausculta relatada: <span className="text-fg">{state.revealedObjective.includes("o-ausculta") ? WHEEZE_LABEL[v.wheeze] : "não avaliada"}</span>
+                  ausculta relatada:{" "}
+                  <span className="text-fg">
+                    {state.revealedObjective.includes("o-ausculta")
+                      ? WHEEZE_LABEL[v.wheeze]
+                      : "não avaliada"}
+                  </span>
                 </li>
               </ul>
             </div>
@@ -512,7 +576,15 @@ export function TheoStation() {
   );
 }
 
-function Metric({ label, value, tone }: { label: string; value: string; tone: "normal" | "warn" | "crit" }) {
+function Metric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "normal" | "warn" | "crit";
+}) {
   const color = tone === "crit" ? "text-crit" : tone === "warn" ? "text-warn" : "text-normal";
   return (
     <div className="rounded-md bg-raise px-2 py-2 ring-1 ring-line">
