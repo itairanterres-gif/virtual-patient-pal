@@ -8,9 +8,10 @@ Escopo restrito ao caso `dispneia-crianca`. Joana, Marcos e o restante do banco 
 
 - **Théo (6 anos)**: só sensações e medos — "meu peito aperta", "cansa pra falar", "tenho medo da máscara". Nada de números, ausculta, exames ou diagnóstico.
 - **Mãe**: linha do tempo (coriza há 3 dias, chiado há 24h), salbutamol em casa, 4 crises anteriores, última há 4 meses, rinite, mãe asmática, preocupações.
-- **Equipe**: canal para pedidos e informes objetivos (nunca dados clínicos que só a avaliação revela).
+- **Equipe**: canal puramente operacional — confirma pedidos, preparo, execução, resultados recebidos e mudanças observadas; nunca revela fato clínico ainda não obtido.
 
-Cada fato tem `actor`, `id`, estado no ledger e a regra de quem pode verbalizá-lo.
+Cada fato tem `actor`, `id`, escopo e estado no ledger. O antecedente "a mãe tem asma" é marcado como **familiar**, separado inequivocamente dos antecedentes pessoais de Théo (rinite alérgica, crises prévias).
+
 
 **Estado clínico simulado** (dono exclusivo do motor, nunca do React): tempo clínico, SpO₂, FC, FR, capacidade de falar (frases / palavras / monossílabos), esforço respiratório, entrada de ar, sibilância, qualidade do sinal do oxímetro e flag de escalonamento de segurança.
 
