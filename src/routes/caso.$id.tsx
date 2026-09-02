@@ -136,7 +136,10 @@ function Cockpit() {
     }
   }, [elapsed, queue, factById]);
 
-  const studentQuestions = messages.filter((m) => m.role === "student").map((m) => m.content);
+  const studentQuestions = useMemo(
+    () => messages.filter((m) => m.role === "student").map((m) => m.content),
+    [messages],
+  );
   const stage = stageFromEvents(events, finished);
 
   async function send() {
@@ -230,7 +233,7 @@ function Cockpit() {
 
   const scores = useMemo(
     () => scoreSession(engineCase, { events, studentQuestions }),
-    [engineCase, events, studentQuestions.join("|")],
+    [engineCase, events, studentQuestions],
   );
 
   async function finish() {
