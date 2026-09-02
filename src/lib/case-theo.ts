@@ -604,6 +604,14 @@ export const theoLatency = {
   genericExec: 10,
   examDuration: 15,
   testTurnaround: 240,
+  /**
+   * Duração clínica de uma pergunta–resposta concluída com Théo, com a mãe ou
+   * com a equipe. É configuração do caso: NUNCA derivada da duração real da
+   * chamada ao modelo, do tempo de digitação nem de quanto a página ficou
+   * aberta. Trinta segundos por troca é o que aproxima uma pergunta dirigida
+   * e a resposta correspondente à beira do leito.
+   */
+  conversationDuration: 30,
 } as const;
 
 /**
@@ -622,5 +630,10 @@ export const theoGating = {
   examesDecisivos: [] as string[],
 };
 
-/** 1 segundo real = 5 segundos de tempo clínico. */
-export const THEO_CLOCK_FACTOR = 5;
+/**
+ * O tempo clínico é DISCRETO e orientado por eventos: não existe fator de
+ * conversão para o tempo real, porque não há relógio de parede no encontro.
+ * O relógio só avança quando uma ação clínica consome duração — conversa,
+ * exame físico, reavaliação ou espera explícita. Página aberta, leitura,
+ * digitação, latência do modelo e aba suspensa não avançam nada.
+ */

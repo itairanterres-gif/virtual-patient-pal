@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   advanceTo,
@@ -23,6 +24,8 @@ import {
   forbiddenActorTerms,
   maeFacts,
   theoGating,
+  theoLatency,
+  theoTimeline,
   recusaPadrao,
   THEO_CASE_ID,
   theoFacts,
@@ -40,22 +43,25 @@ const orderId = (s: TheoState) => s.orders[s.orders.length - 1]!.id;
 const PASSAGEM_VALIDA =
   "Théo, 6 anos, dispneia com esforço moderado; oxigênio e broncodilatador em curso, mãe presente e ciente.";
 
+const CONVERSA_MAE: TheoAction = {
+  type: "fala",
+  actor: "mae",
+  question: "o que aconteceu?",
+  reply: "Começou com coriza há três dias.",
+  grounded: true,
+};
+
 const RACIOCINIO: TheoAction = {
   type: "raciocinio",
-  atSec: 30,
   representacao:
     "Criança de 6 anos com dispneia aguda e esforço respiratório, sem febre, com episódios prévios semelhantes.",
   diferenciais: ["crise de broncoespasmo", "infecção respiratória viral", "corpo estranho"],
   confianca: "media",
 };
 
-function completeOxygen(atSec = 10): TheoAction[] {
+function completeOxygen(): TheoAction[] {
   return [
-    {
-      type: "ordem",
-      atSec,
-      raw: "ofertar oxigênio por cateter nasal a 3 L/min, alvo saturação 94%",
-    },
+    { type: "ordem", raw: "ofertar oxigênio por cateter nasal a 3 L/min, alvo saturação 94%" },
   ];
 }
 
@@ -239,17 +245,16 @@ describe("completude da ordem depende da intervenção", () => {
   });
 
   it("ordem incompleta não é executada nem produz efeito", () => {
-    const s = run([{ type: "ordem", atSec: 10, raw: "fazer salbutamol" }], 900);
+    const s = run([{ type: "ordem", raw: "fazer salbutamol" }], 900);
     expect(s.orders[0]!.status).toBe("aguardando_esclarecimento");
     expect(s.log.some((e) => e.type === "execucao")).toBe(false);
     expect(s.vitals.effort).toBe("critico");
   });
 
   it("esclarecimento completa a ordem sem executá-la", () => {
-    let s = run([{ type: "ordem", atSec: 10, raw: "fazer salbutamol" }]);
+    let s = run([{ type: "ordem", raw: "fazer salbutamol" }]);
     s = applyAction(s, {
       type: "esclarecer",
-      atSec: 20,
       orderId: orderId(s),
       raw: "10 gotas em nebulização",
     });
@@ -261,7 +266,7 @@ describe("completude da ordem depende da intervenção", () => {
 
 describe("nada acontece antes da confirmação", () => {
   it("ordem completa fica parada até confirmar", () => {
-    const s = run(completeOxygen(10), 700);
+    const s = run(completeOxygen(), 700);
     expect(s.orders[0]!.status).toBe("aguardando_confirmacao");
     expect(s.vitals.spo2).toBe(89);
     expect(s.log.some((e) => e.type === "execucao")).toBe(false);
@@ -281,8 +286,8 @@ describe("deterioração sem intervenção", () => {
 
 describe("efeitos das intervenções", () => {
   it("oxigênio confirmado melhora a SpO₂ após preparo e latência", () => {
-    let s = run(completeOxygen(10));
-    s = applyAction(s, { type: "confirmar", atSec: 15, orderId: orderId(s) });
+    let s = run(completeOxygen());
+    s = applyAction(s, { type: "confirmar", orderId: orderId(s) });
     const pre = advanceTo(s, 40);
     expect(pre.vitals.spo2).toBe(92); // ainda em preparo
     const post = advanceTo(s, 6 * 60);
@@ -291,8 +296,8 @@ describe("efeitos das intervenções", () => {
   });
 
   it("salbutamol melhora esforço, entrada de ar e sibilância e eleva a FC", () => {
-    let s = run([{ type: "ordem", atSec: 10, raw: "salbutamol 10 gotas com nebulização" }]);
-    s = applyAction(s, { type: "confirmar", atSec: 15, orderId: orderId(s) });
+    let s = run([{ type: "ordem", raw: "salbutamol 10 gotas com nebulização" }]);
+    s = applyAction(s, { type: "confirmar", orderId: orderId(s) });
     const post = advanceTo(s, 10 * 60);
     expect(post.vitals.effort).toBe("leve");
     expect(post.vitals.airEntry).toBe("normal");
@@ -301,25 +306,27 @@ describe("efeitos das intervenções", () => {
   });
 
   it("prednisolona não melhora o quadro agudo", () => {
-    let s = run([{ type: "ordem", atSec: 10, raw: "prednisolona 30 mg via oral" }]);
-    s = applyAction(s, { type: "confirmar", atSec: 15, orderId: orderId(s) });
+    let s = run([{ type: "ordem", raw: "prednisolona 30 mg via oral" }]);
+    s = applyAction(s, { type: "confirmar", orderId: orderId(s) });
     const post = advanceTo(s, 11 * 60);
     expect(post.vitals.effort).toBe("critico");
     expect(post.log.some((e) => e.label.includes("sem melhora clínica aguda"))).toBe(true);
   });
 
   it("ipratrópio produz efeito adjuvante", () => {
-    let s = run([{ type: "ordem", atSec: 10, raw: "salbutamol 10 gotas com nebulização" }]);
-    s = applyAction(s, { type: "confirmar", atSec: 15, orderId: orderId(s) });
-    s = applyAction(s, { type: "ordem", atSec: 20, raw: "ipratrópio 20 gotas em nebulização" });
-    s = applyAction(s, { type: "confirmar", atSec: 25, orderId: orderId(s) });
+    let s = run([{ type: "ordem", raw: "salbutamol 10 gotas com nebulização" }]);
+    s = applyAction(s, { type: "confirmar", orderId: orderId(s) });
+    s = applyAction(s, { type: "ordem", raw: "ipratrópio 20 gotas em nebulização" });
+    s = applyAction(s, { type: "confirmar", orderId: orderId(s) });
     const post = advanceTo(s, 8 * 60);
     expect(post.log.some((e) => e.label === "Efeito adjuvante do ipratrópio")).toBe(true);
   });
 });
 
 describe("relógio e precedência", () => {
-  it("recupera o tempo após suspensão da aba: salto único == avanço em blocos", () => {
+  // Não há mais recuperação de aba suspensa (não há relógio de parede), mas a
+  // equivalência do avanço segue valendo e é o que garante determinismo.
+  it("avanço explícito: salto único == avanço em blocos", () => {
     const jump = advanceTo(createTheoState(), 900);
     let stepped = createTheoState();
     for (let t = 60; t <= 900; t += 60) stepped = advanceTo(stepped, t);
@@ -331,7 +338,10 @@ describe("relógio e precedência", () => {
   });
 
   it("no mesmo timestamp o evento independente precede a ação do usuário", () => {
-    const s = applyAction(createTheoState(), { type: "monitor", atSec: 360 });
+    // O instante vem de avanço explícito: a ação em si não carrega tempo.
+    const s = applyAction(advanceTo(createTheoState(), theoTimeline.hypoxemiaAt), {
+      type: "monitor",
+    });
     const idxEvento = s.log.findIndex((e) => e.label === "Deterioração — hipoxemia");
     const idxAcao = s.log.findIndex((e) => e.label === "Verificação do monitor");
     expect(idxEvento).toBeGreaterThanOrEqual(0);
@@ -343,18 +353,17 @@ describe("relógio e precedência", () => {
     const script = (): TheoAction[] => [
       {
         type: "fala",
-        atSec: 5,
         actor: "mae",
         question: "o que aconteceu?",
         reply: "Começou ontem.",
         grounded: true,
       },
-      { type: "exame", atSec: 30, raw: "auscultar o tórax" },
-      { type: "ordem", atSec: 60, raw: "oxigênio por máscara facial a 6 L/min" },
-      { type: "confirmar", atSec: 70, orderId: "o1" },
-      { type: "ordem", atSec: 90, raw: "salbutamol 10 gotas em nebulização" },
-      { type: "confirmar", atSec: 100, orderId: "o2" },
-      { type: "reavaliar", atSec: 400 },
+      { type: "exame", raw: "auscultar o tórax" },
+      { type: "ordem", raw: "oxigênio por máscara facial a 6 L/min" },
+      { type: "confirmar", orderId: "o1" },
+      { type: "ordem", raw: "salbutamol 10 gotas em nebulização" },
+      { type: "confirmar", orderId: "o2" },
+      { type: "reavaliar" },
     ];
     const a = run(script(), 900);
     const b = run(script(), 900);
@@ -364,10 +373,9 @@ describe("relógio e precedência", () => {
 
 describe("transferência congela o encontro", () => {
   it("nenhuma ação, efeito ou evento ocorre depois da transferência", () => {
-    let s = run([{ type: "exame", atSec: 20, raw: "avaliar o esforço respiratório" }]);
+    let s = run([{ type: "exame", raw: "avaliar o esforço respiratório" }]);
     s = applyAction(s, {
       type: "transferir",
-      atSec: 120,
       destino: "Dra. Helena, pediatra plantonista",
       passagem:
         "Criança de 6 anos com dificuldade respiratória, avaliada e monitorizada, aguardando conduta.",
@@ -376,10 +384,9 @@ describe("transferência congela o encontro", () => {
     const logLen = s.log.length;
     let after = applyAction(s, {
       type: "ordem",
-      atSec: 200,
       raw: "oxigênio por cateter nasal a 3 L/min",
     });
-    after = applyAction(after, { type: "exame", atSec: 300, raw: "auscultar" });
+    after = applyAction(after, { type: "exame", raw: "auscultar" });
     after = advanceTo(after, 1200);
     expect(after.frozen).toBe(true);
     expect(after.vitals).toEqual(frozenAt);
@@ -388,10 +395,9 @@ describe("transferência congela o encontro", () => {
   });
 
   it("o relógio também para: clockSec não avança depois da transferência", () => {
-    let s = run([{ type: "exame", atSec: 20, raw: "avaliar o esforço respiratório" }]);
+    let s = run([{ type: "exame", raw: "avaliar o esforço respiratório" }]);
     s = applyAction(s, {
       type: "transferir",
-      atSec: 120,
       destino: "Dra. Helena, pediatra plantonista",
       passagem: PASSAGEM_VALIDA,
     });
@@ -399,10 +405,8 @@ describe("transferência congela o encontro", () => {
     expect(s.frozen).toBe(true);
 
     expect(advanceTo(s, 3600).clockSec).toBe(congeladoEm);
-    expect(applyAction(s, { type: "monitor", atSec: 3600 }).clockSec).toBe(congeladoEm);
-    expect(applyAction(s, { type: "aguardar", atSec: 3600, seconds: 600 }).clockSec).toBe(
-      congeladoEm,
-    );
+    expect(applyAction(s, { type: "monitor" }).clockSec).toBe(congeladoEm);
+    expect(applyAction(s, { type: "aguardar", seconds: 600 }).clockSec).toBe(congeladoEm);
     // e o estado inteiro segue idêntico
     expect(advanceTo(s, 3600)).toEqual(s);
   });
@@ -413,20 +417,21 @@ describe("debrief derivado exclusivamente do log", () => {
     let s = run([
       {
         type: "fala",
-        atSec: 5,
         actor: "mae",
         question: "história?",
         reply: "Começou ontem.",
         grounded: true,
       },
-      { type: "exame", atSec: 30, raw: "auscultar o tórax" },
-      { type: "ordem", atSec: 60, raw: "oxigênio por cateter nasal a 3 L/min" },
-      { type: "confirmar", atSec: 70, orderId: "o1" },
-      { type: "reavaliar", atSec: 300 },
+      { type: "exame", raw: "auscultar o tórax" },
+      { type: "ordem", raw: "oxigênio por cateter nasal a 3 L/min" },
+      { type: "confirmar", orderId: "o1" },
+      // Sem avanço de tempo nada é preparado nem executado: a espera explícita
+      // é o que permite o oxigênio chegar ao paciente.
+      { type: "aguardar", seconds: 120 },
+      { type: "reavaliar" },
     ]);
     s = applyAction(s, {
       type: "transferir",
-      atSec: 400,
       destino: "Pediatra plantonista",
       passagem: "Théo, 6 anos, dispneia; oxigênio em curso, reavaliado, sem broncodilatador ainda.",
     });
@@ -444,7 +449,7 @@ describe("debrief derivado exclusivamente do log", () => {
   });
 
   it("marca reavaliação como não avaliável quando não houve intervenção", () => {
-    const d = buildDebrief(run([{ type: "exame", atSec: 10, raw: "olhar o estado geral" }]));
+    const d = buildDebrief(run([{ type: "exame", raw: "olhar o estado geral" }]));
     expect(d.itens.find((i) => i.id === "reavaliacao")!.status).toBe("nao_avaliavel");
   });
 });
@@ -481,7 +486,7 @@ describe("regressão: Joana e Marcos permanecem inalterados", () => {
 describe("transferência exige destino e passagem substantiva", () => {
   it("não encerra sem passagem e o encontro segue aberto", () => {
     const s = run([
-      { type: "transferir", atSec: 60, destino: "Dra. Helena, pediatra plantonista", passagem: "" },
+      { type: "transferir", destino: "Dra. Helena, pediatra plantonista", passagem: "" },
     ]);
     expect(s.frozen).toBe(false);
     expect(s.transfer).toBeNull();
@@ -493,14 +498,14 @@ describe("transferência exige destino e passagem substantiva", () => {
 
   it("não encerra com passagem curta demais", () => {
     const s = run([
-      { type: "transferir", atSec: 60, destino: "Dra. Helena", passagem: "Criança com dispneia." },
+      { type: "transferir", destino: "Dra. Helena", passagem: "Criança com dispneia." },
     ]);
     expect(s.frozen).toBe(false);
     expect(s.transfer).toBeNull();
   });
 
   it("não encerra sem destino, mesmo com passagem boa", () => {
-    const s = run([{ type: "transferir", atSec: 60, destino: "  ", passagem: PASSAGEM_VALIDA }]);
+    const s = run([{ type: "transferir", destino: "  ", passagem: PASSAGEM_VALIDA }]);
     expect(s.frozen).toBe(false);
     expect(s.transfer).toBeNull();
     const recusa = s.log.find(
@@ -513,7 +518,6 @@ describe("transferência exige destino e passagem substantiva", () => {
     const s = run([
       {
         type: "transferir",
-        atSec: 60,
         destino: "Dra. Helena, pediatra plantonista",
         passagem: PASSAGEM_VALIDA,
       },
@@ -532,10 +536,9 @@ describe("transferência exige destino e passagem substantiva", () => {
   });
 
   it("o debrief registra as tentativas recusadas de encerrar", () => {
-    let s = run([{ type: "transferir", atSec: 60, destino: "Dra. Helena", passagem: "" }]);
+    let s = run([{ type: "transferir", destino: "Dra. Helena", passagem: "" }]);
     s = applyAction(s, {
       type: "transferir",
-      atSec: 90,
       destino: "Dra. Helena",
       passagem: PASSAGEM_VALIDA,
     });
@@ -548,7 +551,7 @@ describe("transferência exige destino e passagem substantiva", () => {
 describe("exame decisivo é configuração do caso, não regra geral", () => {
   it("no caso do Théo nenhum exame é decisivo, então nada é bloqueado", () => {
     expect(theoGating.examesDecisivos).toEqual([]);
-    const s = run([{ type: "ordem", atSec: 60, raw: "solicitar radiografia de tórax" }]);
+    const s = run([{ type: "ordem", raw: "solicitar radiografia de tórax" }]);
     expect(s.orders).toHaveLength(1);
     expect(s.log.some((e) => /bloqueado/.test(e.label))).toBe(false);
   });
@@ -581,7 +584,7 @@ describe("exame decisivo é configuração do caso, não regra geral", () => {
 describe("raciocínio declarado", () => {
   it("não bloqueia intervenção terapêutica — o compromisso é antes do dado, não do tratamento", () => {
     const s = run([
-      { type: "ordem", atSec: 60, raw: "ofertar oxigênio por cateter nasal a 3 L/min, alvo 94%" },
+      { type: "ordem", raw: "ofertar oxigênio por cateter nasal a 3 L/min, alvo 94%" },
     ]);
     expect(s.orders).toHaveLength(1);
   });
@@ -609,14 +612,16 @@ describe("raciocínio declarado", () => {
     expect(evento.detail).toContain("Diferenciais:");
     expect(evento.atSec).toBe(s.reasoning[0]!.atSec);
 
-    s = applyAction(s, { type: "ordem", atSec: 90, raw: "solicitar radiografia de tórax" });
+    s = applyAction(s, { type: "ordem", raw: "solicitar radiografia de tórax" });
     expect(s.orders).toHaveLength(1);
     expect(s.orders[0]!.kind).toBe("exame");
   });
 
   it("o debrief reconhece que foi expresso e quando, mas não julga a semântica", () => {
-    let s = run([RACIOCINIO]);
-    s = applyAction(s, { type: "ordem", atSec: 90, raw: "solicitar radiografia de tórax" });
+    // Uma conversa (30 s) antes da declaração: o horário do debrief é fruto da
+    // duração consumida, não de um instante informado pela interface.
+    let s = run([CONVERSA_MAE, RACIOCINIO]);
+    s = applyAction(s, { type: "ordem", raw: "solicitar radiografia de tórax" });
     const d = buildDebrief(s);
     const item = d.itens.find((i) => i.id === "raciocinio-declarado")!;
     expect(item.status).toBe("demonstrado");
@@ -628,7 +633,7 @@ describe("raciocínio declarado", () => {
   });
 
   it("sem raciocínio o item fica não observado e não finge que algo foi bloqueado", () => {
-    const item = buildDebrief(run([{ type: "monitor", atSec: 10 }])).itens.find(
+    const item = buildDebrief(run([{ type: "monitor" }])).itens.find(
       (i) => i.id === "raciocinio-declarado",
     )!;
     expect(item.status).toBe("nao_observado");
@@ -639,7 +644,6 @@ describe("raciocínio declarado", () => {
     const s = run([
       {
         type: "transferir",
-        atSec: 60,
         destino: "Dra. Helena, pediatra plantonista",
         passagem: PASSAGEM_VALIDA,
       },
@@ -648,5 +652,208 @@ describe("raciocínio declarado", () => {
     const item = d.itens.find((i) => i.id === "transferencia")!;
     expect(item.titulo).toBe("Destino e passagem registrados");
     expect(d.naoAvaliavel.some((x) => /qualidade da passagem/i.test(x))).toBe(true);
+  });
+});
+
+describe("tempo clínico discreto e orientado por eventos", () => {
+  const conversa = (reply = "Começou com coriza há três dias."): TheoAction => ({
+    type: "fala",
+    actor: "mae",
+    question: "e depois?",
+    reply,
+    grounded: true,
+  });
+
+  it("página ociosa não altera o estado: ação sem duração não move o relógio", () => {
+    const inicial = createTheoState();
+    let s = applyAction(inicial, { type: "monitor" });
+    s = applyAction(s, {
+      type: "ordem",
+      raw: "ofertar oxigênio por cateter nasal a 3 L/min, alvo saturação 94%",
+    });
+    s = applyAction(s, { type: "confirmar", orderId: orderId(s) });
+    s = applyAction(s, RACIOCINIO);
+
+    expect(s.clockSec).toBe(0);
+    expect(s.vitals).toEqual(inicial.vitals);
+    expect(s.triggered).toEqual([]);
+    // e o estado inicial não é semeado com nada de tempo real
+    expect(createTheoState()).toEqual(createTheoState());
+  });
+
+  it("latência externa não pode alterar o tempo: a duração da conversa é do caso", () => {
+    const curta = applyAction(createTheoState(), conversa("Sim."));
+    const longa = applyAction(
+      createTheoState(),
+      conversa("Começou com coriza há três dias e ontem à noite ele começou a chiar."),
+    );
+    expect(curta.clockSec).toBe(theoLatency.conversationDuration);
+    expect(longa.clockSec).toBe(theoLatency.conversationDuration);
+    expect(longa.clockSec).toBe(curta.clockSec);
+
+    // e a ação não tem campo por onde a interface informaria instante algum
+    expect((conversa() as Record<string, unknown>)["atSec"]).toBeUndefined();
+  });
+
+  it("nenhuma fonte de tempo real sobrevive no caminho do Théo", () => {
+    const arquivos = [
+      "src/lib/theo-engine.ts",
+      "src/lib/case-theo.ts",
+      "src/lib/theo-actors.ts",
+      "src/lib/theo.functions.ts",
+      "src/components/theo-station.tsx",
+    ];
+    for (const f of arquivos) {
+      const src = readFileSync(f, "utf8");
+      expect(src, f).not.toMatch(/Date\.now\(|performance\.now\(|setInterval|THEO_CLOCK_FACTOR/);
+    }
+  });
+
+  it("uma conversa concluída soma exatamente 30 segundos clínicos", () => {
+    expect(theoLatency.conversationDuration).toBe(30);
+    for (const actor of ["theo", "mae", "equipe"] as const) {
+      const s = applyAction(createTheoState(), {
+        type: "fala",
+        actor,
+        question: "o que você sente?",
+        reply: "Cansa falar.",
+        grounded: true,
+      });
+      expect(s.clockSec).toBe(30);
+    }
+  });
+
+  it("três conversas somam 90 segundos e não disparam deterioração", () => {
+    const s = run([conversa(), conversa(), conversa()]);
+    expect(s.clockSec).toBe(90);
+    expect(s.triggered).toEqual([]);
+    expect(s.vitals).toEqual(createTheoState().vitals);
+    expect(s.log.some((e) => /Deterioração/.test(e.label))).toBe(false);
+  });
+
+  it("exame e reavaliação mantêm examDuration; propor, esclarecer e confirmar não somam nada", () => {
+    expect(
+      applyAction(createTheoState(), { type: "exame", raw: "auscultar o tórax" }).clockSec,
+    ).toBe(theoLatency.examDuration);
+    expect(applyAction(createTheoState(), { type: "reavaliar" }).clockSec).toBe(
+      theoLatency.examDuration,
+    );
+
+    let s = applyAction(createTheoState(), { type: "ordem", raw: "fazer salbutamol" });
+    expect(s.clockSec).toBe(0);
+    s = applyAction(s, {
+      type: "esclarecer",
+      orderId: orderId(s),
+      raw: "10 gotas em nebulização",
+    });
+    expect(s.clockSec).toBe(0);
+    s = applyAction(s, { type: "confirmar", orderId: orderId(s) });
+    expect(s.clockSec).toBe(0);
+    expect(s.orders[0]!.status).toBe("preparo");
+  });
+
+  it("avanço explícito dispara os eventos nos marcos previstos", () => {
+    const s1 = applyAction(createTheoState(), {
+      type: "aguardar",
+      seconds: theoTimeline.hypoxemiaAt,
+    });
+    expect(s1.clockSec).toBe(theoTimeline.hypoxemiaAt);
+    expect(s1.triggered).toContain("hipoxemia");
+    expect(s1.vitals.spo2).toBe(89);
+
+    const s2 = applyAction(s1, {
+      type: "aguardar",
+      seconds: theoTimeline.criticalEffortAt - s1.clockSec,
+    });
+    expect(s2.triggered).toContain("esforco");
+    expect(s2.vitals.effort).toBe("critico");
+
+    const s3 = applyAction(s2, {
+      type: "aguardar",
+      seconds: theoTimeline.safetyEscalationAt - s2.clockSec,
+    });
+    expect(s3.clockSec).toBe(theoTimeline.safetyEscalationAt);
+    expect(s3.triggered).toContain("seguranca");
+  });
+
+  it("ordens e efeitos seguem as latências, contadas em tempo clínico", () => {
+    let s = run(completeOxygen());
+    s = applyAction(s, { type: "confirmar", orderId: orderId(s) });
+    const confirmado = s.orders[0]!.confirmedAtSec!;
+    expect(confirmado).toBe(0);
+
+    // uma conversa (30 s) alcança o fim do preparo, não o da execução
+    s = applyAction(s, conversa());
+    expect(s.clockSec).toBe(30);
+    expect(s.orders[0]!.status).toBe("execucao");
+    expect(s.orders[0]!.doneSec).toBeUndefined();
+
+    s = applyAction(s, { type: "aguardar", seconds: 60 });
+    expect(s.orders[0]!.status).toBe("concluida");
+    expect(s.orders[0]!.doneSec).toBe(confirmado + theoLatency.oxygenPrep + theoLatency.oxygenExec);
+    expect(s.orders[0]!.effectSec).toBe(s.orders[0]!.doneSec! + theoLatency.oxygenOnset);
+  });
+
+  it("escalonamento de segurança congela relógio, ações, ordens e efeitos", () => {
+    const congelado = applyAction(createTheoState(), { type: "aguardar", seconds: 20 * 60 });
+    expect(congelado.safetyEscalation).toBe(true);
+    expect(congelado.frozen).toBe(true);
+    // o relógio para no marco, não no alvo pedido
+    expect(congelado.clockSec).toBe(theoTimeline.safetyEscalationAt);
+
+    const depois: TheoAction[] = [
+      { type: "monitor" },
+      { type: "exame", raw: "auscultar o tórax" },
+      { type: "reavaliar" },
+      { type: "aguardar", seconds: 600 },
+      { type: "ordem", raw: "salbutamol 10 gotas em nebulização" },
+      { type: "transferir", destino: "Dra. Helena", passagem: PASSAGEM_VALIDA },
+    ];
+    for (const a of depois) expect(applyAction(congelado, a)).toBe(congelado);
+    expect(advanceTo(congelado, 10000)).toBe(congelado);
+  });
+
+  it("o debrief distingue encerramento por segurança de transferência do estudante", () => {
+    const porSeguranca = buildDebrief(
+      applyAction(createTheoState(), { type: "aguardar", seconds: 20 * 60 }),
+    );
+    expect(porSeguranca.encerramentoPor).toBe("seguranca");
+    expect(porSeguranca.encerramento).toMatch(/SEGURANÇA/);
+    const itemSeg = porSeguranca.itens.find((i) => i.id === "transferencia")!;
+    expect(itemSeg.status).toBe("nao_observado");
+    expect(itemSeg.consequencia).toMatch(/não é passagem de caso/);
+
+    const porTransferencia = buildDebrief(
+      applyAction(createTheoState(), {
+        type: "transferir",
+        destino: "Dra. Helena, pediatra plantonista",
+        passagem: PASSAGEM_VALIDA,
+      }),
+    );
+    expect(porTransferencia.encerramentoPor).toBe("transferencia");
+    expect(porTransferencia.encerramento).toMatch(/TRANSFERÊNCIA/);
+    expect(porTransferencia.itens.find((i) => i.id === "transferencia")!.status).toBe(
+      "demonstrado",
+    );
+
+    expect(buildDebrief(createTheoState()).encerramentoPor).toBe("em_curso");
+  });
+
+  it("o mesmo histórico de ações produz o mesmo estado final, sem relógio nenhum", () => {
+    const script = (): TheoAction[] => [
+      conversa(),
+      { type: "exame", raw: "auscultar o tórax" },
+      { type: "ordem", raw: "oxigênio por máscara facial a 6 L/min" },
+      { type: "confirmar", orderId: "o1" },
+      { type: "aguardar", seconds: 180 },
+      { type: "reavaliar" },
+    ];
+    const a = run(script());
+    const b = run(script());
+    expect(JSON.stringify(a)).toEqual(JSON.stringify(b));
+    // e o relógio final é exatamente a soma das durações consumidas
+    expect(a.clockSec).toBe(
+      theoLatency.conversationDuration + theoLatency.examDuration + 180 + theoLatency.examDuration,
+    );
   });
 });

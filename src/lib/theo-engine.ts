@@ -3,6 +3,10 @@
  *
  * Regras invioláveis:
  * - Tempo, fisiologia, execução e consequência pertencem ao motor (nunca ao React, nunca ao LLM).
+ * - O tempo clínico é DISCRETO e orientado por eventos: avança só quando uma
+ *   ação o consome (conversa, exame, reavaliação, espera explícita). Não há
+ *   relógio de parede: página aberta, leitura, digitação, latência do modelo e
+ *   aba suspensa não avançam o tempo.
  * - Toda intervenção segue: proposta → esclarecimento (se incompleta) → confirmação → preparo → execução → efeito.
  * - Nada acontece antes da confirmação explícita.
  * - O mesmo log de ações produz sempre o mesmo estado final.
@@ -10,7 +14,6 @@
  */
 
 import {
-  THEO_CLOCK_FACTOR,
   theoBaseline,
   theoGating,
   theoLatency,
@@ -18,8 +21,6 @@ import {
   theoTimeline,
   type ObjectiveFact,
 } from "./case-theo";
-
-export { THEO_CLOCK_FACTOR };
 
 export type Speech = "frases" | "frases_curtas" | "palavras" | "monossilabos";
 export type Effort = "leve" | "moderado" | "grave" | "critico";
@@ -464,6 +465,9 @@ export function advanceTo(state: TheoState, targetSec: number): TheoState {
     ) {
       s.triggered.push("seguranca");
       s.safetyEscalation = true;
+      // A equipe assume o cuidado: o encontro do estudante termina aqui, então o
+      // motor congela de fato — relógio, ações, ordens e efeitos.
+      s.frozen = true;
       push(s, {
         type: "evento_independente",
         label: "Escalonamento de segurança acionado",
@@ -472,10 +476,22 @@ export function advanceTo(state: TheoState, targetSec: number): TheoState {
         tone: "crit",
       });
     }
+
+    // Congelou dentro do laço: o tempo clínico para no instante do evento, não
+    // no alvo pedido.
+    if (s.frozen) return s;
   }
 
   s.clockSec = targetSec;
   return s;
+}
+
+/**
+ * Consome duração clínica de uma ação. Único caminho pelo qual o relógio
+ * avança fora da espera explícita.
+ */
+function consumir(state: TheoState, segundos: number): TheoState {
+  return segundos > 0 ? advanceTo(state, state.clockSec + segundos) : state;
 }
 
 // -------------------------------------------------------- interpretação livre
@@ -710,27 +726,31 @@ export function avaliarTransferencia(destino: string, passagem: string): string[
   return faltas;
 }
 
+/**
+ * Ações do estudante. NENHUMA carrega instante: o relógio é do motor, e a
+ * duração de cada ação vem da configuração do caso. Não existe campo por onde
+ * a interface possa informar "que horas são" — é isso que impede o tempo real
+ * de voltar a vazar para dentro do encontro.
+ */
 export type TheoAction =
   | {
       type: "fala";
-      atSec: number;
       actor: "theo" | "mae" | "equipe";
       question: string;
       reply: string;
       grounded: boolean;
     }
-  | { type: "exame"; atSec: number; raw: string }
-  | { type: "monitor"; atSec: number }
-  | { type: "reavaliar"; atSec: number }
-  | { type: "aguardar"; atSec: number; seconds: number }
-  | { type: "ordem"; atSec: number; raw: string; intent?: Intent }
-  | { type: "esclarecer"; atSec: number; orderId: string; raw: string }
-  | { type: "confirmar"; atSec: number; orderId: string }
-  | { type: "cancelar"; atSec: number; orderId: string }
-  | { type: "transferir"; atSec: number; destino: string; passagem: string }
+  | { type: "exame"; raw: string }
+  | { type: "monitor" }
+  | { type: "reavaliar" }
+  | { type: "aguardar"; seconds: number }
+  | { type: "ordem"; raw: string; intent?: Intent }
+  | { type: "esclarecer"; orderId: string; raw: string }
+  | { type: "confirmar"; orderId: string }
+  | { type: "cancelar"; orderId: string }
+  | { type: "transferir"; destino: string; passagem: string }
   | {
       type: "raciocinio";
-      atSec: number;
       representacao: string;
       diferenciais: string[];
       confianca: Confianca;
@@ -744,11 +764,14 @@ export function clinicalSnapshot(v: Vitals) {
   return `${EFFORT_LABEL[v.effort]}, ${AIR_LABEL[v.airEntry]}, ${WHEEZE_LABEL[v.wheeze]}, ${SPEECH_LABEL[v.speech]}`;
 }
 
-/** Aplica uma ação: primeiro o motor avança o tempo, depois a ação é executada. */
+/**
+ * Aplica uma ação: executa no instante clínico corrente e, se a ação tiver
+ * duração clínica, consome-a depois — para que a consequência do tempo apareça
+ * no log depois do que a provocou.
+ */
 export function applyAction(state: TheoState, action: TheoAction): TheoState {
-  const advanced = advanceTo(state, Math.max(state.clockSec, action.atSec));
-  if (advanced.frozen) return advanced;
-  const s = clone(advanced);
+  if (state.frozen) return state;
+  const s = clone(state);
 
   switch (action.type) {
     case "fala": {
@@ -765,7 +788,8 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
         actor: action.actor,
         tone: action.grounded ? "normal" : "warn",
       });
-      return s;
+      // Uma pergunta–resposta concluída consome a duração configurada no caso.
+      return consumir(s, theoLatency.conversationDuration);
     }
     case "exame": {
       const t = norm(action.raw);
@@ -784,7 +808,7 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
           causeId: decision.id,
         });
       }
-      return advanceTo(s, s.clockSec + theoLatency.examDuration);
+      return consumir(s, theoLatency.examDuration);
     }
     case "monitor": {
       const d = push(s, { type: "decisao", label: "Verificação do monitor" });
@@ -804,14 +828,14 @@ export function applyAction(state: TheoState, action: TheoAction): TheoState {
         detail: `${monitorSnapshot(s.vitals)} · ${clinicalSnapshot(s.vitals)}`,
         causeId: d.id,
       });
-      return advanceTo(s, s.clockSec + theoLatency.examDuration);
+      return consumir(s, theoLatency.examDuration);
     }
     case "aguardar": {
       push(s, {
         type: "decisao",
         label: `Aguardar ${Math.round(action.seconds / 60)} min de observação`,
       });
-      return advanceTo(s, s.clockSec + action.seconds);
+      return consumir(s, action.seconds);
     }
     case "ordem": {
       const intent = action.intent ?? parseIntent(action.raw);
@@ -988,10 +1012,18 @@ export type DebriefItem = {
   consequencia?: string | undefined;
 };
 
+/**
+ * Como o encontro terminou. Encerramento por segurança (a equipe assumiu o
+ * cuidado às 14 min com o paciente instável) NÃO é transferência: o estudante
+ * não entregou o caso, o caso foi tirado dele.
+ */
+export type EncerramentoPor = "transferencia" | "seguranca" | "em_curso";
+
 export type Debrief = {
   automatico: true;
   itens: DebriefItem[];
   cronologia: CausalEvent[];
+  encerramentoPor: EncerramentoPor;
   encerramento: string;
   naoAvaliavel: string[];
 };
@@ -1186,19 +1218,28 @@ export function buildDebrief(state: TheoState): Debrief {
         ]
       : transferenciasRecusadas.slice(0, 2).map(fmt),
     consequencia:
-      transferenciasRecusadas.length > 0
-        ? `Houve ${transferenciasRecusadas.length} tentativa(s) de encerrar sem preencher a passagem de caso; o encontro seguiu aberto até o registro.`
-        : undefined,
+      !state.transfer && state.safetyEscalation
+        ? "Não houve transferência: o encontro terminou por escalonamento de segurança, com a equipe assumindo o cuidado. Isso não é passagem de caso."
+        : transferenciasRecusadas.length > 0
+          ? `Houve ${transferenciasRecusadas.length} tentativa(s) de encerrar sem preencher a passagem de caso; o encontro seguiu aberto até o registro.`
+          : undefined,
   });
+
+  const encerramentoPor: EncerramentoPor = state.transfer
+    ? "transferencia"
+    : state.safetyEscalation
+      ? "seguranca"
+      : "em_curso";
 
   return {
     automatico: true,
     itens,
     cronologia: state.log,
+    encerramentoPor,
     encerramento: state.transfer
-      ? `Encontro encerrado por transferência do cuidado para ${state.transfer.destino} às ${clockLabel(state.transfer.atSec)}.`
+      ? `Encontro encerrado por TRANSFERÊNCIA feita pelo estudante: cuidado passado a ${state.transfer.destino} às ${clockLabel(state.transfer.atSec)}.`
       : state.safetyEscalation
-        ? "Encontro encerrado por evento de segurança."
+        ? `Encontro encerrado por SEGURANÇA às ${clockLabel(theoTimeline.safetyEscalationAt)}: o paciente seguia instável e a equipe assumiu o cuidado. O estudante não transferiu o caso.`
         : "Encontro ainda em curso.",
     naoAvaliavel: [
       "Raciocínio clínico expresso em texto livre não é validado automaticamente — requer leitura do preceptor.",
