@@ -1,4 +1,5 @@
 import { joanaCase } from "./case-joana";
+import { THEO_CASE_ID } from "./case-theo";
 import { CASES, type ClinicalCase } from "./cases";
 import {
   asked,
@@ -130,7 +131,7 @@ function adaptCase(c: ClinicalCase): EngineCase {
 const registry: Record<string, EngineCase> = {
   [joanaCase.id]: joanaCase,
   ...Object.fromEntries(
-    CASES.filter((c) => c.id !== joanaCase.id).map((c) => [c.id, adaptCase(c)]),
+    CASES.filter((c) => c.id !== joanaCase.id && c.id !== THEO_CASE_ID).map((c) => [c.id, adaptCase(c)]),
   ),
 };
 
