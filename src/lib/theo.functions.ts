@@ -44,7 +44,7 @@ export const askTheoActor = createServerFn({ method: "POST" })
         temperature: 0.6,
       });
 
-      const out = result.experimental_output;
+      const out = await result.output;
       const check = validateActorReply(actor, out?.reply ?? "", out?.factIds ?? []);
       return {
         reply: check.reply,
