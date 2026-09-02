@@ -44,7 +44,7 @@ A estação oferece: seletor de interlocutor (Théo / mãe / equipe), conversa l
 
 Removidos no Théo: listas de manobras, cardápio de exames, lista de condutas, estágios "avaliado/investigado/tratado", vitais estáticos, botão "Encerrar" genérico e avaliação numérica.
 
-**Interpretador de intenção**: regras determinísticas cobrindo examinar, verificar oxímetro, reavaliar, administrar medicamento, fornecer oxigênio, aguardar/avançar tempo, solicitar exame e transferir cuidado. Se um LLM for usado, ele só produz a intenção estruturada; validação e execução ficam no motor.
+A estação é **responsiva em mobile, tablet e desktop** (grade fluida, monitor fixo à direita em telas largas), preservando o acabamento visual atual — sem o contêiner fixo de 390 px.
 
 ## Fase 3 — IA, transferência e debrief
 
