@@ -25,11 +25,16 @@ Faltando dose, via, dispositivo ou alvo, o motor devolve um pedido de esclarecim
 
 **Event log causal** com tipos distintos: observação, decisão, confirmação, execução, efeito e evento independente — cada um com tempo clínico e vínculo causal ao que o originou.
 
+**Política do relógio (explícita)**: 1 segundo real = 5 segundos de tempo clínico; avanço manual permitido ("aguardar 2 minutos"); após suspensão da aba, o tempo é recuperado por diferença de timestamp e reprocessado passo a passo pelo motor; em timestamps iguais a precedência é (1) transições de ordens agendadas, (2) efeitos fisiológicos, (3) eventos independentes, (4) ação do usuário. O mesmo histórico de ações e tempos sempre produz o mesmo estado final.
+
+**Identidade curricular e curadoria**: o caso carrega competências, autoria, versão e `statusCuracao: provisorio`, exibido na estação como aviso de conteúdo clínico provisório, não liberável a estudantes antes da aprovação humana por pediatra.
+
 `src/lib/engine.ts` ganha os tipos compartilhados (ator, estado clínico, ciclo de ordem, evento causal) sem quebrar Joana/Marcos. `src/lib/engine-registry.ts` passa a registrar o Théo por `case-theo.ts` e o remove do `adaptCase()`.
 
 **Testes** (vitest) provando: Théo não revela dado objetivo; a mãe informa crises anteriores; ordem incompleta não executa; nada acontece antes da confirmação; sem intervenção há deterioração nos tempos previstos; oxigênio e broncodilatador produzem os efeitos previstos; o mesmo log de ações produz sempre o mesmo estado final (determinismo).
 
 Sem nota 0–100. Sem LLM decidindo fisiologia, execução ou correção.
+
 
 ## Fase 2 — Rota conectada ao motor
 
