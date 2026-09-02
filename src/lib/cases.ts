@@ -104,7 +104,11 @@ export const CASES: ClinicalCase[] = [
       { label: "Peak flow", value: "55", unit: "% pred", status: "warn" },
     ],
     physicalExam: [
-      { name: "Respiratório", result: "Sibilos difusos, tempo expiratório prolongado", status: "crit" },
+      {
+        name: "Respiratório",
+        result: "Sibilos difusos, tempo expiratório prolongado",
+        status: "crit",
+      },
       { name: "Tórax", result: "Tiragem intercostal e subcostal", status: "warn" },
       { name: "Cardiovascular", result: "Taquicárdico, sem sopros", status: "warn" },
       { name: "ORL", result: "Mucosa nasal pálida, secreção clara", status: "normal" },
@@ -149,7 +153,11 @@ export const CASES: ClinicalCase[] = [
       { label: "Dor (EVA)", value: "7", unit: "/10", status: "warn" },
     ],
     physicalExam: [
-      { name: "Abdome", result: "Blumberg positivo em FID, descompressão dolorosa", status: "crit" },
+      {
+        name: "Abdome",
+        result: "Blumberg positivo em FID, descompressão dolorosa",
+        status: "crit",
+      },
       { name: "Ruídos hidroaéreos", result: "Diminuídos", status: "warn" },
       { name: "Sinal do psoas", result: "Positivo", status: "warn" },
       { name: "Cardiovascular", result: "Sem alterações", status: "normal" },
@@ -157,7 +165,11 @@ export const CASES: ClinicalCase[] = [
     labs: [
       { name: "Hemograma", result: "Leuco 15.200 com desvio à esquerda", status: "warn" },
       { name: "PCR", result: "78 mg/L", status: "warn" },
-      { name: "US de abdome", result: "Apêndice espessado, 9 mm, não compressível", status: "crit" },
+      {
+        name: "US de abdome",
+        result: "Apêndice espessado, 9 mm, não compressível",
+        status: "crit",
+      },
       { name: "Urina tipo I", result: "Sem alterações", status: "normal" },
     ],
     managements: [
