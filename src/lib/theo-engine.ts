@@ -88,12 +88,12 @@ export type CausalEvent = {
   atSec: number;
   type: EventType;
   label: string;
-  detail?: string;
+  detail?: string | undefined;
   /** Evento que originou este evento (cadeia causal). */
-  causeId?: string;
-  orderId?: string;
-  actor?: string;
-  tone?: "normal" | "warn" | "crit";
+  causeId?: string | undefined;
+  orderId?: string | undefined;
+  actor?: string | undefined;
+  tone?: "normal" | "warn" | "crit" | undefined;
 };
 
 export type OrderKind =
@@ -115,30 +115,30 @@ export type OrderStatus =
   | "cancelada";
 
 export type OrderFields = {
-  dose?: string;
-  via?: string;
-  device?: string;
-  flow?: string;
-  target?: string;
-  test?: string;
+  dose?: string | undefined;
+  via?: string | undefined;
+  device?: string | undefined;
+  flow?: string | undefined;
+  target?: string | undefined;
+  test?: string | undefined;
 };
 
 export type Order = {
   id: string;
   kind: OrderKind;
-  drug?: Drug;
+  drug?: Drug | undefined;
   raw: string;
   label: string;
   fields: OrderFields;
   missing: string[];
   status: OrderStatus;
   createdAtSec: number;
-  confirmedAtSec?: number;
-  execStartSec?: number;
-  doneSec?: number;
-  effectSec?: number;
-  resultSec?: number;
-  resultFactIds?: string[];
+  confirmedAtSec?: number | undefined;
+  execStartSec?: number | undefined;
+  doneSec?: number | undefined;
+  effectSec?: number | undefined;
+  resultSec?: number | undefined;
+  resultFactIds?: string[] | undefined;
 };
 
 export type TheoState = {
@@ -379,9 +379,9 @@ export type IntentKind =
 
 export type Intent = {
   kind: IntentKind;
-  orderKind?: OrderKind;
-  drug?: Drug;
-  seconds?: number;
+  orderKind?: OrderKind | undefined;
+  drug?: Drug | undefined;
+  seconds?: number | undefined;
   raw: string;
   fields: OrderFields;
 };
@@ -700,7 +700,7 @@ export type DebriefItem = {
   titulo: string;
   status: DebriefStatus;
   evidencias: string[];
-  consequencia?: string;
+  consequencia?: string | undefined;
 };
 
 export type Debrief = {
