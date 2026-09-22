@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { PV001 } from "@/lib/pv001/case";
+import { newSessionId } from "@/lib/pv001/session-id";
 import {
   advance,
   consultResource,
@@ -108,7 +109,7 @@ export function MariaStation() {
   }, []);
   useEffect(() => {
     setReady(true);
-    setVoiceAvailable(!!recognitionConstructor());
+    setVoiceAvailable(window.isSecureContext && !!recognitionConstructor());
     try {
       setSaved(sessionIndex(localStorage));
     } catch {
@@ -136,7 +137,7 @@ export function MariaStation() {
     if (current.current || !participant.trim()) return;
     setIntro(false);
     commit({
-      session: createSession(participant, crypto.randomUUID()),
+      session: createSession(participant, newSessionId()),
       evaluation: null,
       reviews: [],
     });
