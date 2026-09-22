@@ -44,10 +44,23 @@ function Biblioteca() {
       <main className="flex-1 px-4 pt-4 pb-8">
         <h1 className="text-[15px] font-semibold">Biblioteca de casos</h1>
         <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
-          {CASES.length} casos · paciente virtual com IA
+          {CASES.length + 1} casos · paciente virtual
         </p>
 
         <div className="mt-4 space-y-2.5">
+          <Link
+            to="/caso/$id"
+            params={{ id: "PV-001" }}
+            className="block rounded-md bg-card p-3 ring-1 ring-line hover:ring-primary/50"
+          >
+            <p className="text-[13px] font-semibold">
+              Maria Aparecida Souza, 61 anos — consulta de retorno
+            </p>
+            <p className="mt-1 text-[12px] text-faint">
+              Ambulatório do SUS · 12ª fase · 15 minutos · complexidade baixa
+            </p>
+            <p className="mt-1 text-[11px] text-faint">PV-001 v1.1 · pré-piloto formativo</p>
+          </Link>
           {CASES.map((c) => (
             <Link
               key={c.id}
