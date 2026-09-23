@@ -1,0 +1,55 @@
+{
+  "case_id": "PV-001",
+  "case_version": "1.1",
+  "verification_date": "2026-09-22",
+  "base_commit": "491d70f9024916c2179d1b1d7df9a92898db206f",
+  "phase_order": ["patient", "patient_behavior_tests", "evaluator", "reflection_and_debriefing"],
+  "automated_tests": {
+    "command": "bun run test",
+    "files_passed": 3,
+    "tests_passed": 77,
+    "failures": 0
+  },
+  "typecheck": { "command": "tsc --noEmit", "passed": true },
+  "lint": {
+    "command": "eslint .",
+    "errors": 0,
+    "warnings": 6,
+    "warnings_scope": "pre-existing react-refresh warnings in UI components"
+  },
+  "production_build": { "command": "bun run build", "passed": true, "deployed": false },
+  "browser": {
+    "engine": "Microsoft Edge, Playwright headless",
+    "desktop_viewport": [1280, 900],
+    "mobile_viewport": [390, 844],
+    "checks_passed": [
+      "neutral prebriefing",
+      "video metadata",
+      "historical lab resource",
+      "three central moments",
+      "explicit closure",
+      "reflection before debriefing",
+      "eight debrief questions",
+      "missing evaluator key fallback",
+      "human review persisted",
+      "reload and restore",
+      "no horizontal mobile overflow"
+    ],
+    "uncaught_page_errors": 0,
+    "video": { "duration_seconds": 9, "width": 1280, "height": 720 },
+    "real_microphone_tested": false,
+    "speech_quality_reviewed_by_human": false
+  },
+  "live_llm_evaluator_tested": false,
+  "institutional_storage_configured": false,
+  "human_pilot_released": false,
+  "specifications_preserved": ["specifications/v1.0.txt", "specifications/v1.1-adendo.txt"],
+  "synthetic_sessions": "test-sessions.json",
+  "limitations": [
+    "deterministic intent coverage needs human conversational testing",
+    "local browser storage is not institutional or tamper-proof",
+    "reviewer identity is self-declared",
+    "intro is a static portrait with synthetic speech, not filmed acting",
+    "automated checklist is only a suggestion for mandatory human review"
+  ]
+}
