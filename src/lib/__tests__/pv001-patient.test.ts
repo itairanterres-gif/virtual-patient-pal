@@ -54,6 +54,7 @@ describe("PV-001 v1.1 — phase 1/2 patient gate", () => {
       "Vamos verificar a disponibilidade no SUS e decidir juntas um plano que consiga seguir.",
     );
     expect(s.flags.costAddressed).toBe(true);
+    expect(last(s)).toBe(LINES.accessUnderstood);
     expect(s.caseSnapshot).toEqual(PV001);
   });
   it("distinguishes a glycemic-only explanation", () => {
@@ -62,6 +63,86 @@ describe("PV-001 v1.1 — phase 1/2 patient gate", () => {
     expect(last(s)).toContain(LINES.glucose);
     expect(last(s)).not.toContain(LINES.cardio);
     expect(s.flags.reasonExplained).toBe(false);
+  });
+  it("progresses through the reported spoken consultation without unrelated history or denial of renal benefit", () => {
+    let s = say(
+      make(),
+      "Olá Dona Maria eu olhei seus exames Por que essa preocupação com seus rins de fato a sua glicose está um pouco alta e Isso pode atrapalhar a função renal e a senhora tem uma pequena alteração também está com seu colesterol elevado e a sua pressão está um pouco alta Então nós vamos precisar ajustar seus medicamentos ok",
+    );
+    expect(last(s)).toBe(LINES.why);
+    s = say(
+      s,
+      "é como ele disse Dona Maria o seu diabete está descontrolado então a gente precisa conseguir trazer essa glicose para um valor melhor então a minha ideia aqui é usar um outro remédio que além de ajudar a controlar melhor o Diabetes também vai proteger os seus rins desse dessa alteração a senhora usando essa medicação a tendência é que a gente consiga manter a função dos seus rins melhor",
+    );
+    expect(s.flags.reasonExplained).toBe(true);
+    expect(s.flags.newMedication).toBe(true);
+    expect(last(s)).toContain(LINES.renalBenefit);
+    expect(last(s)).toContain(LINES.access);
+    expect(s.triggers.some((e) => e.type === "cardiorenal_explanation")).toBe(false);
+    s = say(
+      s,
+      "sei que são seus medicamentos mas veja só a pressão está elevada sua glicose está elevada e também seu colesterol a gente precisa ter o Diabetes bem controlado e com os medicamentos que são que a gente considera protetores para o rim E também o remédio da pressão tem que ser um remédio que ajude a preservar o seu rim veja como a senhora olhou nos seus exames a sua creatina tá elevada e isso pode significar que a senhora está começando a ter alteração Como foi a sua preocupação Então nós vamos agora fazer um ajuste Para justamente reduzir o risco da senhora precisar fazer hemodiálise que era a preocupação que a senhora trouxe",
+    );
+    expect(last(s)).toBe(LINES.accessPending);
+    for (const id of ["glucose", "diet", "medications"] as const) {
+      expect(s.transcript.some((t) => t.lineIds.includes(id))).toBe(false);
+    }
+    expect(s.caseSnapshot).toEqual(PV001);
+  });
+  it.each([
+    "Além da glicose, queremos preservar seus rins.",
+    "Esse remédio ajuda a manter a função renal.",
+    "A intenção é reduzir o risco de precisar de hemodiálise e melhorar a glicose.",
+  ])("acknowledges renal benefit without requiring the word coração: %s", (text) => {
+    const s = say(say(make(), "Vamos adicionar outro medicamento."), text);
+    expect(last(s)).toContain(LINES.renalBenefit);
+    expect(last(s)).not.toContain(LINES.glucose);
+    expect(s.triggers.some((e) => e.type === "cardiorenal_explanation")).toBe(false);
+  });
+  it("does not recognize negated protection as an explanation", () => {
+    const s = say(
+      say(make(), "Vamos adicionar outro remédio."),
+      "Esse remédio não vai proteger seus rins, só baixa a glicose.",
+    );
+    expect(s.flags.reasonExplained).toBe(false);
+    expect(last(s)).toContain(LINES.glucose);
+    expect(s.flags.renalExplained).toBe(false);
+  });
+  it("does not repeat the same understanding after a repeated explanation", () => {
+    let s = say(make(), "Vamos adicionar outro medicamento.");
+    s = say(s, "Ele protege os rins e o coração, além de baixar o açúcar.");
+    s = say(s, "Ele protege os rins e o coração, além de baixar o açúcar.");
+    expect(s.transcript.filter((t) => t.lineIds.includes("cardio"))).toHaveLength(1);
+    expect(last(s)).toBe(LINES.accessPending);
+  });
+  it("does not ask about access again when it was already addressed", () => {
+    let s = say(make(), "Vamos adicionar outro remédio e verificar sua disponibilidade no SUS.");
+    s = say(s, "Ele ajuda a proteger seus rins e baixar a glicose.");
+    expect(s.flags.costAddressed).toBe(true);
+    expect(last(s)).not.toContain(LINES.access);
+    s = say(s, "Vamos verificar a disponibilidade no SUS.");
+    expect(last(s)).not.toContain(LINES.accessUnderstood);
+  });
+  it.each([
+    "A senhora está começando a ter uma alteração.",
+    "Sei que são seus medicamentos, precisamos rever o tratamento.",
+    "A senhora usando essa medicação poderá proteger os rins.",
+    "Vamos conversar sobre alimentação e atividade física.",
+  ])("does not answer unasked history questions: %s", (text) => {
+    const s = say(make(), text);
+    expect(s.transcript.at(-1)?.lineIds).not.toEqual(expect.arrayContaining(["diet"]));
+    expect(s.transcript.at(-1)?.lineIds).not.toEqual(expect.arrayContaining(["medications"]));
+    expect(s.transcript.at(-1)?.lineIds).not.toEqual(expect.arrayContaining(["exercise"]));
+  });
+  it.each([
+    ["Quais remédios a senhora toma", "medications"],
+    ["O que a senhora está tomando", "medications"],
+    ["Me fale sobre sua alimentação", "diet"],
+    ["O que a senhora come no dia a dia", "diet"],
+    ["A senhora faz atividade física", "exercise"],
+    ["A senhora sente dor no peito", "chest"],
+  ] as const)("recognizes actual voice questions without punctuation: %s", (text, id) => {
+    expect(say(make(), text).transcript.at(-1)?.lineIds).toContain(id);
   });
   it("returns to ignored fear and progressively withdraws", () => {
     let s = make();

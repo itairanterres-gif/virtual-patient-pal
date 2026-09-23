@@ -40,7 +40,7 @@ O intérprete de intenção nesta versão é determinístico e conservador. Isso
 ## Três momentos e estados
 
 1. **Medo renal:** abertura obrigatória. Acolhimento explícito + explicação renal sem alarmismo levam de `anxious` a `reassured`. Após duas falas que ignoram o medo, há retomada; persistindo por quatro, `withdrawn`. Acolhimento posterior permite recuperação.
-2. **Motivo do ajuste:** anúncio do ajuste dispara “Por que outro?”. Explicação glicocêntrica conserva a dúvida; explicação de proteção dos rins e coração dispara “Ah, então não é só pelo açúcar”. Havendo acolhimento renal, chega a `collaborative`.
+2. **Motivo do ajuste:** anúncio do ajuste dispara “Por que outro?”. Explicação glicocêntrica conserva a dúvida; explicação de proteção dos rins e coração dispara “Ah, então não é só pelo açúcar”. Explicação apenas do benefício renal também produz compreensão compatível, sem exigir menção ao coração. O evento `renal_benefit_explanation` é distinto de `cardiorenal_explanation`; `reasonExplained` representa compreensão da paciente, não cumprimento do checklist. Havendo acolhimento renal, chega a `collaborative`.
 3. **Acesso:** nova medicação prepara a pergunta de custo para a resposta seguinte, preservando a ordem dos momentos. Há retomada aos 14 minutos ou antes do fechamento se necessário. O estudante pode avançar sem resolver o medo; este continua afetando o estado e o encerramento.
 
 Insulina produz apenas preocupação leve uma vez, sem estado de resistência, sem recusa prolongada e sem história adicional. Estados não dependem de LLM nem de troca de imagem. Alarmismo e promessa absoluta de nunca precisar de diálise não produzem tranquilização pelo motor.
@@ -76,6 +76,12 @@ Imagem produzida com a ferramenta integrada imagegen. Prompt completo: `media-pr
 Interação por voz em navegadores compatíveis; a fala reconhecida vira texto e a resposta autorizada pode ser ouvida. O reconhecimento pode usar processamento remoto do provedor do navegador; isso é informado no prebriefing. Microfone negado, falta de suporte e falha de síntese deixam o chat disponível. Não há avatar contínuo. A qualidade da voz e o reconhecimento com microfone real exigem teste no equipamento do piloto.
 
 ## Verificação e falhas corrigidas
+
+Correção do diálogo após teste do autor (22/09/2026): a transcrição de três falas espontâneas foi incorporada aos testes de regressão. O motor confundia benefício renal sem menção ao coração com explicação exclusivamente glicêmica, tratava “senhora usando essa medicação” como pergunta sobre medicamentos e encontrava “come” dentro de “começando”, liberando a fala sobre dieta. Agora os fatos dependem de expressões de pergunta próximas do assunto; a compreensão já demonstrada não é repetida a cada explicação; acesso já abordado não dispara nova pergunta de custo. A proposta “minha ideia é usar outro remédio” também é reconhecida. Não se alteraram dados clínicos, critérios do avaliador ou registros anteriores.
+
+**Limite desta correção:** continua sendo um intérprete por regras e um catálogo de respostas. Os testes cobrem o relato e variações, não demonstram compreensão geral de conversa. Para a naturalidade pretendida, a próxima etapa é interpretar intenção e contexto com um modelo de linguagem, separando a compreensão da seleção de fatos autorizados e da avaliação. Esse serviço não foi ativado nesta correção; ampliar expressões não equivale a implementá-lo.
+
+Verificação desta revisão: 110 testes em seis arquivos aprovados; TypeScript, lint dos arquivos de código alterados e build aprovados. As três falas do relato também foram reproduzidas na interface local, em sessão sintética separada: Maria respondeu sobre o benefício renal e acesso, sem emitir as falas de dieta, medicamentos ou negação da explicação renal. O build conserva avisos de depreciação do TanStack e de configuração Vite preexistentes. A verificação foi textual; não representa novo teste de microfone ou de naturalidade da voz.
 
 As fases paciente → testes comportamentais → avaliador → pós-cena foram executadas nessa ordem. A primeira bateria do paciente passou antes de acrescentar o avaliador.
 

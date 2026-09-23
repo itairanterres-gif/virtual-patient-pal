@@ -178,9 +178,13 @@ export function signals(raw: string) {
     /(?:entendo|compreendo|imagino|percebo|acolho|sei que).{0,80}(?:medo|preocup|assust|angusti)|(?:medo|preocup).{0,50}(?:compreensivel|entendo|faz sentido)|o que.{0,35}(?:entendeu|assusta|preocupa)/.test(
       q,
     );
-  const renal = /rim|rins|renal|dialise/.test(q);
+  const renal = /\b(?:rim|rins|renal|renais|cardiorrenal|dialise|hemodialise)\b/.test(q);
+  const renalBenefit =
+    /(?:proteg\w*|preserv\w*|cuidar|manter).{0,80}(?:\brim\b|\brins\b|funcao renal)|(?:rim|rins|funcao renal).{0,40}(?:proteg\w*|preserv\w*|melhor)|reduzir.{0,40}(?:risco|chance).{0,40}(?:hemo)?dialise/.test(
+      q,
+    ) && !/nao.{0,20}(?:proteg|preserv|cuidar|manter|reduz)/.test(q);
   const nonAlarmist =
-    /nao (?:quer dizer|significa|e sinonimo|precisa|quer dizer que precisa)|nao.{0,25}(?:agora|momento|inevitavel)|(?:proteger|cuidar|preservar|acompanhar).{0,35}(?:rim|rins|funcao renal)|(?:rim|rins).{0,40}(?:ainda funciona|ainda trabalham)/.test(
+    /nao (?:quer dizer|significa|e sinonimo|precisa|quer dizer que precisa)|nao.{0,25}(?:agora|momento|inevitavel)|(?:rim|rins).{0,40}(?:ainda funciona|ainda trabalham)/.test(
       q,
     );
   const alarming =
@@ -189,7 +193,7 @@ export function signals(raw: string) {
     );
   const insulin = /\binsulina\b/.test(q);
   const proposal =
-    /(?:vamos|vou|quero|precisamos|devemos|proponho|recomendo|podemos|gostaria de).{0,45}(?:iniciar|comecar|introduzir|adicionar|acrescentar|ajustar|mudar|trocar|associar|prescrever|usar)|(?:inicio|prescrevo|adiciono|introduzo|proponho).{0,60}(?:medic|remedio|tratamento|gliflozina|sglt|estatina|insulina)/.test(
+    /(?:vamos|vou|quero|precisamos|devemos|proponho|recomendo|podemos|gostaria de|minha ideia).{0,45}(?:iniciar|comecar|introduzir|adicionar|acrescentar|ajustar|mudar|trocar|associar|prescrever|usar)|(?:inicio|prescrevo|adiciono|introduzo|proponho).{0,60}(?:medic|remedio|tratamento|gliflozina|sglt|estatina|insulina)/.test(
       q,
     );
   const negatedProposal =
@@ -207,7 +211,7 @@ export function signals(raw: string) {
     renal &&
     /coracao|cardiovascular|cardiorrenal/.test(q) &&
     !/nao.{0,12}(?:proteg|benefici|reduz|preserv)/.test(q);
-  const glucoseOnly = /glicose|glicemia|acucar|hba1c/.test(q) && !cardio;
+  const glucoseOnly = /glicose|glicemia|acucar|hba1c/.test(q) && !cardio && !renalBenefit;
   const access =
     !/nao.{0,15}(?:verific|consult|confirm|import)|nao tem.{0,20}(?:sus|postinho)/.test(q) &&
     /sus|postinho|farmacia|custo|acesso|comprar|caro/.test(q) &&
@@ -218,15 +222,56 @@ export function signals(raw: string) {
     q,
     injection,
     acknowledges,
-    renalExplanation: renal && nonAlarmist && !alarming,
+    renalExplanation: renal && (nonAlarmist || renalBenefit) && !alarming,
     alarming,
     insulin,
     adjustment: proposal && !negatedProposal,
     newMedication,
     cardio,
+    renalBenefit: renalBenefit && !alarming,
     glucoseOnly,
     access,
   };
+}
+
+/** Requests need an interrogative/eliciting phrase near the topic, not just "senhora". */
+function historyRequests(q: string): LineId[] {
+  const requests: [LineId, RegExp][] = [
+    ["identity", /qual.{0,20}(?:nome|idade)|quantos anos (?:a senhora |voce )?tem/],
+    [
+      "occupation",
+      /(?:qual|com o que|em que|onde).{0,25}(?:profissao|trabalh)|(?:voce|senhora) (?:trabalha|e aposentada)/,
+    ],
+    [
+      "household",
+      /(?:com quem|onde) (?:a senhora |voce )?mora|quem.{0,20}ajuda|(?:me conte|me fale).{0,25}(?:familia|filha|marido)/,
+    ],
+    [
+      "diabetes",
+      /(?:ha quanto tempo|quando|quantos anos).{0,40}diabet|diabet.{0,20}(?:ha quanto tempo|desde quando)/,
+    ],
+    ["conditions", /(?:quais|que|tem).{0,25}(?:doencas|problemas de saude)/],
+    [
+      "medications",
+      /\bquais? (?:os |sao os |sao seus |sao os seus |a sua |sua )?(?:remedios?|medicamentos?|medicacao)|\bque (?:remedios?|medicamentos?)|(?:o que|esta|anda).{0,15}(?:tomando|toma|usando)|(?:voce|senhora) (?:toma|usa).{0,20}(?:remedio|medicamento)|(?:me conte|me fale).{0,25}(?:remedio|medicamento|medicacao)/,
+    ],
+    [
+      "diet",
+      /como.{0,25}(?:alimentacao|dieta)|o que.{0,20}\bcome\b|(?:voce|senhora) come\b|(?:me conte|me fale).{0,25}(?:alimentacao|comida|dieta)/,
+    ],
+    [
+      "exercise",
+      /(?:faz|pratica|costuma fazer).{0,20}(?:atividade fisica|exercicio)|(?:voce|senhora) caminha\b|como.{0,25}(?:atividade fisica|exercicio)/,
+    ],
+    ["chest", /(?:tem|sente|teve|sentiu).{0,25}(?:dor.{0,10}peito|dor torac)/],
+    ["breathing", /(?:tem|sente|teve|sentiu).{0,25}(?:falta de ar|dispneia)/],
+    [
+      "swelling",
+      /(?:tem|notou|teve|percebeu).{0,25}(?:inchaco|edema)|pernas.{0,15}(?:incham|inchadas)/,
+    ],
+    ["vision", /(?:notou|tem|teve|percebeu).{0,25}(?:visao|visuais)|como.{0,20}visao/],
+  ];
+  return requests.filter(([, pattern]) => pattern.test(q)).map(([id]) => id);
 }
 
 /** Every response is assembled here from whole approved lines, never model prose. */
@@ -280,22 +325,30 @@ export function respond(s0: Session, raw: string, now = Date.now()): Session {
     }
   }
   if (x.newMedication) f.newMedication = true;
-  if (whyPreviouslyAsked && x.cardio) {
+  const reasonPreviouslyExplained = f.reasonExplained;
+  if (whyPreviouslyAsked && (x.cardio || x.renalBenefit)) {
+    // Patient understanding is not a checklist score: renal benefit alone is meaningful.
     f.reasonExplained = true;
-    reply.push("cardio");
-    event(s, "cardiorenal_explanation", "Explicação com proteção renal e cardiovascular");
+    if (!reasonPreviouslyExplained) reply.push(x.cardio ? "cardio" : "renalBenefit");
+    event(
+      s,
+      x.cardio ? "cardiorenal_explanation" : "renal_benefit_explanation",
+      x.cardio
+        ? "Explicação com proteção renal e cardiovascular"
+        : "Benefício renal explicado; não implica explicação cardiovascular completa",
+    );
     if (f.fearAcknowledged && f.renalExplained) transition(s, "collaborative");
   } else if (whyPreviouslyAsked && x.glucoseOnly && !f.reasonExplained) {
-    reply.push("glucose");
+    if (!s.transcript.some((t) => t.lineIds.includes("glucose"))) reply.push("glucose");
     event(s, "glucose_only", "Resposta glicocêntrica; revisão humana necessária");
   }
   if (x.access) {
+    if (f.costAsked && !f.costAddressed) reply.push("accessUnderstood");
     f.costAddressed = true;
-    if (f.costAsked) reply.push("accessUnderstood");
     event(s, "access_addressed", "Acesso abordado pelo estudante");
   }
   // Queue the third moment until the next reply, preserving narrative order.
-  if (whyPreviouslyAsked && f.newMedication && !f.costAsked) {
+  if (whyPreviouslyAsked && f.newMedication && !f.costAsked && !f.costAddressed) {
     f.costAsked = true;
     s.phase = "access";
     reply.push("access");
@@ -307,21 +360,13 @@ export function respond(s0: Session, raw: string, now = Date.now()): Session {
     event(s, "insulin", "Preocupação leve; sem ramo de resistência");
   }
   const q = x.q;
-  const questionLike = /\?|como|qual|quanto|quando|quem|voce|senhora|me conte|me fale/.test(q);
-  if (questionLike) {
-    if (/nome|idade|quantos anos.*senhora/.test(q) && !/diabet/.test(q)) reply.push("identity");
-    if (/trabalh|profissao|aposent/.test(q)) reply.push("occupation");
-    if (/mora|quem.*ajuda|familia|filha|marido/.test(q)) reply.push("household");
-    if (/diabet/.test(q) && /tempo|anos|quando/.test(q)) reply.push("diabetes");
-    if (/doencas|problemas de saude/.test(q)) reply.push("conditions");
-    if (/toma|usa|em uso/.test(q) && /remedio|medicamento|medicacao/.test(q))
-      reply.push("medications");
-    if (/aliment|comida|dieta|come/.test(q)) reply.push("diet");
-    if (/atividade fisica|exercicio|caminha|sedentar/.test(q)) reply.push("exercise");
-    if (/dor.*peito|dor torac/.test(q)) reply.push("chest");
-    if (/falta de ar|dispneia/.test(q)) reply.push("breathing");
-    if (/inchaco|edema/.test(q)) reply.push("swelling");
-    if (/visao|visuais/.test(q)) reply.push("vision");
+  const requestedHistory = historyRequests(q);
+  const questionLike =
+    requestedHistory.length > 0 ||
+    /\?|\b(?:qual|quais|quanto|quando|quem)\b|me conte|me fale|^como\b/.test(q);
+  reply.push(...requestedHistory);
+  if (reply.length === 0 && x.renalBenefit && reasonPreviouslyExplained) {
+    reply.push(f.costAsked && !f.costAddressed ? "accessPending" : "understood");
   }
   if (reply.length === 0) {
     const technical =
