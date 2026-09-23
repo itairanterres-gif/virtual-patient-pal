@@ -31,9 +31,9 @@ import {
   openMicrophone,
   recordMicrophone,
   playNaturalSpeech,
-  type Recognition,
   type Recording,
 } from "@/lib/pv001/voice";
+import { captureSpeech, type SpeechCapture } from "@/lib/pv001/speech-capture";
 import {
   audioCapabilities,
   renderMariaSpeech,
@@ -86,7 +86,8 @@ export function MariaStation() {
   const [reviewNote, setReviewNote] = useState("");
   const [reviewItems, setReviewItems] = useState<Judgment[]>([]);
   const [saved, setSaved] = useState<ReturnType<typeof sessionIndex>>([]);
-  const recognition = useRef<Recognition | null>(null);
+  const recognition = useRef<SpeechCapture | null>(null);
+  const recordingConfirmed = useRef(false);
   const recording = useRef<Recording | null>(null);
   const voiceGeneration = useRef(0);
   const voiceTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -133,12 +134,7 @@ export function MariaStation() {
   const stopVoice = useCallback(() => {
     voiceGeneration.current++;
     clearTimeout(voiceTimeout.current);
-    if (recognition.current) {
-      recognition.current.onend = null;
-      recognition.current.onresult = null;
-      recognition.current.onerror = null;
-      recognition.current.abort();
-    }
+    recognition.current?.cancel();
     recognition.current = null;
     recording.current?.cancel();
     recording.current = null;
@@ -254,8 +250,9 @@ export function MariaStation() {
   }
   async function listen(testOnly = false) {
     if (listening) {
+      recordingConfirmed.current = true;
       recording.current?.stop();
-      recognition.current?.stop();
+      recognition.current?.finish();
       return;
     }
     if (
@@ -266,6 +263,7 @@ export function MariaStation() {
     )
       return;
     stopVoice();
+    recordingConfirmed.current = false;
     const generation = voiceGeneration.current;
     if (testOnly) setVoiceTestText("");
     const stillCurrent = () =>
@@ -322,7 +320,7 @@ export function MariaStation() {
         ? "Diga uma frase curta, como: Bom dia, Maria. Depois clique em Concluir fala."
         : naturalVoice
           ? "Ouvindo… Clique em Concluir fala quando terminar. Cada gravação dura até 45 segundos."
-          : "Ouvindo… Clique em Concluir fala quando terminar. O navegador também pode enviar a fala ao detectar uma pausa.",
+          : "Ouvindo… Pode fazer pausas. Sua fala só será enviada quando você clicar em Concluir fala.",
     );
     if (naturalVoice && typeof MediaRecorder !== "undefined") {
       try {
@@ -342,7 +340,16 @@ export function MariaStation() {
         const data = new FormData();
         data.append("audio", blob, "fala");
         const text = await transcribe({ data });
-        received(text);
+        if (!stillCurrent()) return;
+        if (recordingConfirmed.current) received(text);
+        else {
+          setTranscribing(false);
+          if (testOnly) setVoiceTestText(text);
+          else setInput(text);
+          setMicStatus(
+            "A gravação chegou ao limite. O texto foi preservado e não foi enviado à paciente. Revise e use Enviar fala.",
+          );
+        }
       } catch {
         if (generation === voiceGeneration.current) {
           setListening(false);
@@ -356,59 +363,41 @@ export function MariaStation() {
     const Constructor = recognitionConstructor();
     if (!Constructor || !stillCurrent()) return;
     stopSpeech();
-    const rec = new Constructor();
-    recognition.current = rec;
-    rec.lang = "pt-BR";
-    rec.continuous = false;
-    rec.interimResults = true;
-    let final = "";
-    let recognitionError = false;
-    rec.onresult = (event) => {
-      if (generation !== voiceGeneration.current) return;
-      let draft = "";
-      final = "";
-      for (const result of Array.from(event.results)) {
-        draft += result[0].transcript;
-        if (result.isFinal) final += result[0].transcript;
-      }
+    const preserveDraft = (draft: string) => {
       if (testOnly) setVoiceTestText(draft);
       else setInput(draft);
     };
-    rec.onerror = (event) => {
-      if (!stillCurrent()) return;
-      recognitionError = true;
-      clearTimeout(voiceTimeout.current);
-      setListening(false);
-      setMicStatus(microphoneMessage(event.error));
-      technical("recognition_error", event.error);
-      final = "";
-    };
-    rec.onend = () => {
-      if (generation !== voiceGeneration.current) return;
-      recognition.current = null;
-      clearTimeout(voiceTimeout.current);
-      setListening(false);
-      // Never deliver a delayed speech result after the timer has closed the encounter.
-      if (!recognitionError) received(final.trim());
-    };
-    try {
-      rec.start();
-      setListening(true);
-      voiceTimeout.current = setTimeout(
-        () => {
-          if (!stillCurrent()) return;
-          stopVoice();
-          setMicStatus(
-            "O reconhecimento não concluiu sua fala. Tente uma frase curta ou use o ditado do Windows no campo de texto.",
-          );
-        },
-        testOnly ? 20000 : 45000,
-      );
-    } catch (error) {
-      setListening(false);
-      setMicStatus(microphoneMessage(error));
-      technical("microphone_error", "Não foi possível iniciar captura");
-    }
+    setListening(true);
+    recognition.current = captureSpeech(Constructor, {
+      onDraft: (draft) => {
+        if (stillCurrent()) preserveDraft(draft);
+      },
+      onComplete: (text) => {
+        if (!stillCurrent()) return;
+        recognition.current = null;
+        setListening(false);
+        received(text);
+      },
+      onError: (error, draft) => {
+        if (!stillCurrent()) return;
+        recognition.current = null;
+        setListening(false);
+        preserveDraft(draft);
+        setMicStatus(
+          `${microphoneMessage(error)} O texto captado foi preservado, sem envio automático.`,
+        );
+        technical("recognition_error", error);
+      },
+      onLimit: (draft) => {
+        if (!stillCurrent()) return;
+        recognition.current = null;
+        setListening(false);
+        preserveDraft(draft);
+        setMicStatus(
+          "A escuta atingiu 2 minutos. O texto foi preservado, sem envio automático. Revise e use Enviar fala.",
+        );
+      },
+    });
   }
   async function runEvaluation() {
     const value = current.current;

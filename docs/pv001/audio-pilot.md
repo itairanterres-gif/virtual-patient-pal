@@ -1,5 +1,11 @@
 # Revisão de áudio da prévia PV-001
 
+## Turno de voz controlado pelo estudante
+
+Após conseguir transcrever, o autor relatou cortes a cada 2–3 segundos. A causa no código era reconhecimento de uma única fala (`continuous=false`) com envio no evento de término do navegador. Agora o reconhecimento é contínuo e acumula os trechos; se o navegador encerrar por pausa, a captura é retomada sem enviar a fala à paciente. Somente **Concluir fala** confirma o envio. Atualizações cumulativas não duplicam palavras; o texto é preservado em erro e os callbacks tardios são descartados após cancelamento/encerramento.
+
+A escuta nativa tem limite de 2 minutos por captura: ao atingir esse limite, preserva o rascunho para revisão/envio manual, sem resposta automática da paciente. A integração alternativa mantém o limite de gravação de 45 segundos e também não envia à paciente quando encerra por limite. Os seis testes de regressão cobrem pausas, acúmulo, término manual, cancelamento, falha de rede, limites e ausência de evento final. A fluidez no microfone real ainda deve ser conferida pelo autor.
+
 ## Falha observada no navegador interno e correção do teste
 
 Na consulta aberta do autor, foi observada a mensagem de falha do serviço de reconhecimento (`network`). O teste anterior apenas abria e fechava `getUserMedia`: isso confirmava acesso ao dispositivo, mas não reconhecimento. Os testes de interface anteriores usavam eventos simulados e não detectavam essa indisponibilidade real.
@@ -14,7 +20,7 @@ Contingência: no Windows, focar o campo de fala e usar Windows + H; depois envi
 
 A configuração de áudio aparece antes da abertura e durante a consulta: teste de acesso ao microfone, teste de som, seleção das vozes em português fornecidas pelo navegador e mensagens distintas para permissão negada, dispositivo ausente, dispositivo ocupado e falha de rede. A lista de vozes atualiza quando o navegador termina de carregá-la. A qualidade depende das vozes instaladas/disponíveis; uma voz natural não é presumida.
 
-O estudante inicia a fala explicitamente. Com o reconhecimento nativo, uma fala final é enviada ao terminar o reconhecimento. Na integração opcional, o navegador captura até 45 segundos, o estudante conclui a fala e o servidor solicita sua transcrição. A transcrição passa pelo mesmo motor clínico fixo e fica no registro. Cancelar, enviar texto ou encerrar a consulta invalida resultados pendentes e libera o microfone. Há botão para ouvir novamente a última resposta.
+O estudante inicia a fala explicitamente e confirma o envio em Concluir fala. Pausas e encerramentos automáticos do reconhecimento não enviam o turno. Na integração opcional, o navegador captura até 45 segundos e o servidor solicita sua transcrição; ao atingir o limite, ela fica como rascunho. A transcrição enviada passa pelo mesmo motor clínico fixo e fica no registro. Cancelar, enviar texto ou encerrar a consulta invalida resultados pendentes e libera o microfone. Há botão para ouvir novamente a última resposta.
 
 ## Integração opcional preparada, ainda sem teste real do provedor
 
