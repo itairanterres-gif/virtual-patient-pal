@@ -80,7 +80,7 @@ export function microphoneMessage(error: unknown) {
     case "NotReadableError":
       return "O microfone está ocupado ou indisponível. Feche outros aplicativos que o utilizam e tente novamente.";
     case "network":
-      return "O serviço de reconhecimento do navegador não respondeu. Verifique a internet ou use outro navegador.";
+      return "Falha no serviço de reconhecimento de fala deste navegador. Isso não confirma defeito no microfone. Abra a consulta no Chrome externo ou use Windows + H no campo de texto. A transcrição alternativa da aplicação ainda depende de configuração.";
     case "no-speech":
       return "Nenhuma fala foi reconhecida. Confira o volume do microfone e tente novamente.";
     default:

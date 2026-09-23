@@ -78,6 +78,7 @@ export function MariaStation() {
   const [micStatus, setMicStatus] = useState("Verificando compatibilidade de áudio…");
   const [micPending, setMicPending] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [voiceTestText, setVoiceTestText] = useState("");
   const [busy, setBusy] = useState(false);
   const [reflection, setReflection] = useState("");
   const [debrief, setDebrief] = useState("");
@@ -88,6 +89,7 @@ export function MariaStation() {
   const recognition = useRef<Recognition | null>(null);
   const recording = useRef<Recording | null>(null);
   const voiceGeneration = useRef(0);
+  const voiceTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const chat = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const evaluate = useServerFn(evaluateMaria);
@@ -130,6 +132,7 @@ export function MariaStation() {
   );
   const stopVoice = useCallback(() => {
     voiceGeneration.current++;
+    clearTimeout(voiceTimeout.current);
     if (recognition.current) {
       recognition.current.onend = null;
       recognition.current.onresult = null;
@@ -202,6 +205,7 @@ export function MariaStation() {
 
   function start() {
     if (current.current || !participant.trim()) return;
+    stopVoice();
     setIntro(false);
     commit({
       session: createSession(participant, newSessionId()),
@@ -233,26 +237,6 @@ export function MariaStation() {
       if (generation === voiceGeneration.current) failed();
     }
   }
-  async function testMicrophone() {
-    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) return;
-    stopVoice();
-    const generation = voiceGeneration.current;
-    setMicPending(true);
-    setMicStatus("Aguardando permissão do navegador para testar o microfone…");
-    try {
-      const stream = await openMicrophone();
-      const label = stream.getAudioTracks()[0]?.label;
-      stream.getTracks().forEach((track) => track.stop());
-      if (generation !== voiceGeneration.current) return;
-      setMicStatus(
-        `Microfone acessível${label ? `: ${label}` : ""}. ${voiceAvailable ? "Pronto para iniciar uma fala." : "Falta o serviço de reconhecimento neste navegador; abra no Edge ou Chrome."}`,
-      );
-    } catch (error) {
-      if (generation === voiceGeneration.current) setMicStatus(microphoneMessage(error));
-    } finally {
-      if (generation === voiceGeneration.current) setMicPending(false);
-    }
-  }
   function send(text = input) {
     const value = current.current;
     if (!value || !text.trim()) return;
@@ -268,7 +252,7 @@ export function MariaStation() {
       setError((e as Error).message);
     }
   }
-  async function listen() {
+  async function listen(testOnly = false) {
     if (listening) {
       recording.current?.stop();
       recognition.current?.stop();
@@ -278,35 +262,67 @@ export function MariaStation() {
       !voiceAvailable ||
       micPending ||
       transcribing ||
-      current.current?.session.mode !== "patient_mode"
+      (!testOnly && current.current?.session.mode !== "patient_mode")
     )
       return;
     stopVoice();
     const generation = voiceGeneration.current;
+    if (testOnly) setVoiceTestText("");
+    const stillCurrent = () =>
+      generation === voiceGeneration.current &&
+      (testOnly || current.current?.session.mode === "patient_mode");
+    const received = (text: string) => {
+      if (!stillCurrent()) return;
+      clearTimeout(voiceTimeout.current);
+      setTranscribing(false);
+      if (testOnly) {
+        setVoiceTestText(text);
+        setMicStatus(
+          text
+            ? "Reconhecimento confirmado: sua fala apareceu abaixo. Este teste não é enviado à paciente."
+            : "Não foi possível reconhecer a fala. O teste ainda não confirmou a conversa por voz.",
+        );
+      } else {
+        setMicStatus(
+          text
+            ? "Fala transcrita e enviada. Você pode iniciar a próxima fala."
+            : "Nenhuma fala reconhecida. Tente novamente.",
+        );
+        if (text) send(text);
+      }
+    };
     setMicPending(true);
     setMicStatus("Aguardando acesso ao microfone…");
+    voiceTimeout.current = setTimeout(() => {
+      if (!stillCurrent()) return;
+      stopVoice();
+      setMicStatus(
+        "O navegador não respondeu ao pedido de microfone. Verifique a permissão deste site ou cancele e tente em outro navegador.",
+      );
+    }, 20000);
     let stream: MediaStream;
     try {
       stream = await openMicrophone();
     } catch (error) {
       if (generation === voiceGeneration.current) {
         setMicPending(false);
+        clearTimeout(voiceTimeout.current);
         setMicStatus(microphoneMessage(error));
       }
       return;
     }
-    if (
-      generation !== voiceGeneration.current ||
-      current.current?.session.mode !== "patient_mode"
-    ) {
+    if (!stillCurrent()) {
       stream.getTracks().forEach((track) => track.stop());
       return;
     }
     setMicPending(false);
+    clearTimeout(voiceTimeout.current);
     setMicStatus(
-      naturalVoice
-        ? "Ouvindo… Clique em Concluir fala quando terminar. Cada gravação dura até 45 segundos."
-        : "Ouvindo… Clique em Concluir fala quando terminar. O navegador também pode enviar a fala ao detectar uma pausa.",
+      testOnly
+        ? "Diga uma frase curta, como: Bom dia, Maria. Depois clique em Concluir fala."
+        : naturalVoice
+          ? "Ouvindo… Clique em Concluir fala quando terminar. Cada gravação dura até 45 segundos."
+          : "Ouvindo… Clique em Concluir fala quando terminar. O navegador também pode enviar a fala ao detectar uma pausa.",
     );
     if (naturalVoice && typeof MediaRecorder !== "undefined") {
       try {
@@ -326,18 +342,7 @@ export function MariaStation() {
         const data = new FormData();
         data.append("audio", blob, "fala");
         const text = await transcribe({ data });
-        if (
-          generation !== voiceGeneration.current ||
-          current.current?.session.mode !== "patient_mode"
-        )
-          return;
-        setTranscribing(false);
-        setMicStatus(
-          text
-            ? "Fala transcrita e enviada. Você pode iniciar a próxima fala."
-            : "Nenhuma fala reconhecida. Tente novamente.",
-        );
-        if (text) send(text);
+        received(text);
       } catch {
         if (generation === voiceGeneration.current) {
           setListening(false);
@@ -349,7 +354,7 @@ export function MariaStation() {
     }
     stream.getTracks().forEach((track) => track.stop());
     const Constructor = recognitionConstructor();
-    if (!Constructor || current.current?.session.mode !== "patient_mode") return;
+    if (!Constructor || !stillCurrent()) return;
     stopSpeech();
     const rec = new Constructor();
     recognition.current = rec;
@@ -357,6 +362,7 @@ export function MariaStation() {
     rec.continuous = false;
     rec.interimResults = true;
     let final = "";
+    let recognitionError = false;
     rec.onresult = (event) => {
       if (generation !== voiceGeneration.current) return;
       let draft = "";
@@ -365,9 +371,14 @@ export function MariaStation() {
         draft += result[0].transcript;
         if (result.isFinal) final += result[0].transcript;
       }
-      setInput(draft);
+      if (testOnly) setVoiceTestText(draft);
+      else setInput(draft);
     };
     rec.onerror = (event) => {
+      if (!stillCurrent()) return;
+      recognitionError = true;
+      clearTimeout(voiceTimeout.current);
+      setListening(false);
       setMicStatus(microphoneMessage(event.error));
       technical("recognition_error", event.error);
       final = "";
@@ -375,16 +386,24 @@ export function MariaStation() {
     rec.onend = () => {
       if (generation !== voiceGeneration.current) return;
       recognition.current = null;
+      clearTimeout(voiceTimeout.current);
       setListening(false);
       // Never deliver a delayed speech result after the timer has closed the encounter.
-      if (final.trim() && current.current?.session.mode === "patient_mode") {
-        setMicStatus("Fala enviada. Você pode iniciar a próxima fala.");
-        send(final);
-      }
+      if (!recognitionError) received(final.trim());
     };
     try {
       rec.start();
       setListening(true);
+      voiceTimeout.current = setTimeout(
+        () => {
+          if (!stillCurrent()) return;
+          stopVoice();
+          setMicStatus(
+            "O reconhecimento não concluiu sua fala. Tente uma frase curta ou use o ditado do Windows no campo de texto.",
+          );
+        },
+        testOnly ? 20000 : 45000,
+      );
     } catch (error) {
       setListening(false);
       setMicStatus(microphoneMessage(error));
@@ -432,13 +451,19 @@ export function MariaStation() {
         {micStatus}
       </p>
       <div className="flex flex-wrap gap-3">
-        <button
-          className={button}
-          disabled={!ready || micPending || listening || transcribing}
-          onClick={testMicrophone}
-        >
-          {micPending ? "Aguardando permissão…" : "Testar microfone"}
-        </button>
+        {!active && (
+          <button
+            className={button}
+            disabled={!ready || !voiceAvailable || micPending || transcribing}
+            onClick={() => void listen(true)}
+          >
+            {listening
+              ? "Concluir fala"
+              : micPending
+                ? "Aguardando permissão…"
+                : "Testar minha voz"}
+          </button>
+        )}
         <button
           className={button}
           disabled={!ready || listening || micPending || transcribing}
@@ -453,6 +478,24 @@ export function MariaStation() {
           Testar som do navegador
         </button>
       </div>
+      {(micPending || listening || transcribing) && (
+        <button
+          className={button}
+          onClick={() => {
+            stopVoice();
+            setMicStatus("Captura cancelada. Você pode tentar novamente.");
+          }}
+        >
+          Cancelar captura
+        </button>
+      )}
+      {voiceTestText && (
+        <p className="rounded bg-raise p-2 text-sm">Frase do teste: {voiceTestText}</p>
+      )}
+      <p className="text-sm">
+        O teste só confirma a voz quando a frase falada aparece em texto. Antes da consulta, o teste
+        não inicia o cronômetro.
+      </p>
       {!naturalVoice && (
         <label className="block text-sm">
           Voz de Maria no navegador
@@ -535,7 +578,14 @@ export function MariaStation() {
             />
           </label>
           {audioSettings}
-          <button className={button} disabled={!participant.trim()} onClick={() => setIntro(true)}>
+          <button
+            className={button}
+            disabled={!participant.trim()}
+            onClick={() => {
+              stopVoice();
+              setIntro(true);
+            }}
+          >
             Iniciar abertura
           </button>
           {saved.length > 0 && (
@@ -678,7 +728,7 @@ export function MariaStation() {
                     <button
                       className={button}
                       disabled={!voiceAvailable || micPending || transcribing}
-                      onClick={listen}
+                      onClick={() => void listen()}
                     >
                       {listening
                         ? "Concluir fala"
@@ -715,6 +765,9 @@ export function MariaStation() {
                       Ouvir Maria
                     </label>
                   </div>
+                  <p className="rounded bg-raise p-3 text-sm" role="status">
+                    {micStatus}
+                  </p>
                   {!voiceAvailable && (
                     <p className="text-sm">
                       Reconhecimento de voz indisponível neste navegador. Use o texto abaixo.
@@ -730,6 +783,11 @@ export function MariaStation() {
                       onChange={(e) => setInput(e.target.value)}
                     />
                   </label>
+                  <p className="text-sm">
+                    Alternativa por voz no Windows: clique no campo acima, pressione{" "}
+                    <kbd>Windows + H</kbd>, fale e depois clique em Enviar fala. Esse ditado usa o
+                    serviço de voz da Microsoft.
+                  </p>
                   <button
                     className={button}
                     disabled={!input.trim() || listening}

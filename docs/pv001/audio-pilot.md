@@ -1,5 +1,15 @@
 # Revisão de áudio da prévia PV-001
 
+## Falha observada no navegador interno e correção do teste
+
+Na consulta aberta do autor, foi observada a mensagem de falha do serviço de reconhecimento (`network`). O teste anterior apenas abria e fechava `getUserMedia`: isso confirmava acesso ao dispositivo, mas não reconhecimento. Os testes de interface anteriores usavam eventos simulados e não detectavam essa indisponibilidade real.
+
+O botão do prebriefing agora é **Testar minha voz** e percorre a mesma transcrição da consulta. Só confirma reconhecimento quando recebe texto; a frase de teste não é enviada à paciente nem inicia uma sessão. Há cancelamento, limite de espera, diagnóstico ao lado do botão de fala e resultado vazio explícito. Iniciar a abertura ou consulta cancela o teste para impedir envio tardio. O serviço de reconhecimento do navegador interno continua sem funcionamento confirmado; esta mudança não ativa um provedor alternativo.
+
+Verificação real nesta revisão: em uma aba temporária do navegador interno, o novo botão chegou à etapa de reconhecimento e reproduziu a falha do serviço. A tela exibiu o diagnóstico sem iniciar sessão ou cronômetro. Não se confirmou transcrição de voz real; a consulta original do autor foi preservada e a aba de teste foi fechada.
+
+Contingência: no Windows, focar o campo de fala e usar Windows + H; depois enviar o texto reconhecido. É reconhecimento online da Microsoft, não da aplicação. Referência: [Microsoft — digitação por voz](https://support.microsoft.com/pt-br/accessibility/windows/use-voice-typing-to-talk-instead-of-type-on-your-pc). O funcionamento no equipamento do usuário precisa ser confirmado por ele.
+
 ## O que muda
 
 A configuração de áudio aparece antes da abertura e durante a consulta: teste de acesso ao microfone, teste de som, seleção das vozes em português fornecidas pelo navegador e mensagens distintas para permissão negada, dispositivo ausente, dispositivo ocupado e falha de rede. A lista de vozes atualiza quando o navegador termina de carregá-la. A qualidade depende das vozes instaladas/disponíveis; uma voz natural não é presumida.

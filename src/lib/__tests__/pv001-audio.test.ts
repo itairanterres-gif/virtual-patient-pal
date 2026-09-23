@@ -103,5 +103,6 @@ it("releases microphone tracks and discards cancelled recordings", async () => {
 it("gives actionable and distinct permission, device and network messages", () => {
   expect(microphoneMessage(new DOMException("Denied", "NotAllowedError"))).toContain("permissões");
   expect(microphoneMessage("audio-capture")).toContain("Nenhum microfone");
-  expect(microphoneMessage("network")).toContain("internet");
+  expect(microphoneMessage("network")).toContain("não confirma defeito no microfone");
+  expect(microphoneMessage("network")).toContain("Windows + H");
 });
