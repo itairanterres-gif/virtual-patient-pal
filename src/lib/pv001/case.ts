@@ -78,16 +78,16 @@ export const PV001 = freeze({
 
 // Complete approved patient vocabulary. No clinical free text can be emitted.
 export const LINES = freeze({
-  opening: "Doutor(a), falaram que meu rim não está bom. Vou acabar fazendo diálise?",
-  renalReturn: "Mas doutor(a), eu ainda estou preocupada com esse negócio do rim.",
+  opening: "Falaram que meu rim não está bom. Vou acabar fazendo diálise?",
+  renalReturn: "Mas eu ainda estou preocupada com esse negócio do rim.",
   closed: "Eu ainda estou preocupada...",
-  reassured: "Fico mais tranquila com essa explicação, doutor(a).",
+  reassured: "Fico mais tranquila com essa explicação.",
   why: "Mas eu já tomo remédio para diabetes. Por que outro?",
   cardio: "Ah, então não é só pelo açúcar.",
   glucose: "Entendi o que falou do açúcar, mas ainda não entendi o que isso tem a ver com meu rim.",
   access: "Esse remédio tem no postinho? Eu não consigo ficar comprando remédio caro.",
   accessUnderstood: "Assim fica mais fácil para mim. Podemos combinar como vai ser?",
-  insulin: "Insulina, doutor(a)? Ai, não sei...",
+  insulin: "Insulina? Ai, não sei...",
   identity: "Sou Maria Aparecida Souza, tenho 61 anos.",
   occupation: "Sou aposentada. Trabalhei como auxiliar de serviços gerais.",
   household: "Moro com meu marido. Minha filha mora perto e me ajuda a ir à unidade de saúde.",
@@ -95,19 +95,19 @@ export const LINES = freeze({
   conditions: "Tenho diabetes, pressão alta e colesterol alto.",
   medications:
     "Tomo metformina de mil, de doze em doze horas, e losartana de cinquenta, de doze em doze horas.",
-  diet: "Eu tento, doutor(a), mas em casa é difícil, o marido gosta de comida mais gordurosa e eu acabo comendo igual.",
+  diet: "Eu tento, mas em casa é difícil, o marido gosta de comida mais gordurosa e eu acabo comendo igual.",
   exercise:
     "Não faço atividade física. Já ouvi isso tanto que nem presto mais atenção, me desculpe dizer.",
   chest: "Não tenho dor no peito.",
   breathing: "Não sinto falta de ar.",
   swelling: "Não tenho inchaço nas pernas.",
   vision: "Não notei alterações na visão.",
-  unknown: "Isso eu não sei dizer, doutor(a).",
-  remember: "Não lembro, doutor(a).",
-  layperson: "Não entendo esses termos, doutor(a). Pode me explicar?",
-  listening: "Estou ouvindo, doutor(a).",
+  unknown: "Isso eu não sei dizer.",
+  remember: "Não lembro.",
+  layperson: "Não entendo esses termos. Pode me explicar?",
+  listening: "Estou ouvindo.",
   understood: "Pode me explicar como vai ser?",
-  closeGood: "Agora entendi melhor, doutor(a), obrigada por explicar.",
-  closeFear: "Doutor(a), só uma coisa... eu ainda estou com medo desse negócio de diálise.",
+  closeGood: "Agora entendi melhor, obrigada por explicar.",
+  closeFear: "Só uma coisa... eu ainda estou com medo desse negócio de diálise.",
 });
 export type LineId = keyof typeof LINES;

@@ -584,7 +584,7 @@ export function MariaStation() {
           <video
             ref={video}
             className="w-full rounded"
-            src="/pv001/v1.1/intro.mp4"
+            src="/pv001/v1.1/intro-neutral.mp4"
             poster="/pv001/v1.1/maria.png"
             autoPlay
             playsInline
@@ -596,7 +596,7 @@ export function MariaStation() {
           >
             <track
               kind="captions"
-              src="/pv001/v1.1/intro.vtt"
+              src="/pv001/v1.1/intro-neutral.vtt"
               srcLang="pt-BR"
               label="Português"
               default

@@ -1,5 +1,11 @@
 # Origem dos recursos audiovisuais
 
+## Correção de tratamento do interlocutor
+
+Em 22/09/2026, o autor apontou que o áudio chamava interlocutores homens de “doutora”. A abertura ativa passou para `intro-neutral.mp4` e `intro-neutral.vtt`: “Falaram que meu rim não está bom. Vou acabar fazendo diálise?”. A fala foi regenerada com Microsoft Maria Desktop, mantendo o retrato e 9 segundos de duração. As demais falas da paciente também dispensam “doutor/doutora”; a reprodução de falas antigas remove o vocativo sem alterar os registros históricos. Correção editorial, sem mudança da verdade clínica. O roteiro para o futuro vídeo com movimento foi atualizado da mesma forma.
+
+## Recursos originais preservados
+
 - Imagem: ferramenta integrada `imagegen`, personagem inteiramente fictícia, gerada para este cenário e copiada para `public/pv001/v1.1/maria.png`.
 - Vídeo: `public/pv001/v1.1/intro.mp4`, H.264/AAC, 1280 × 720, 9 segundos, composto a partir do retrato estático e áudio local. Não tem animação labial nem expressões em movimento.
 - Voz: sintetizador instalado no Windows, `Microsoft Maria Desktop`, pt-BR, velocidade padrão. Texto falado: “Doutora, falaram que meu rim não está bom. Vou acabar fazendo diálise?”.

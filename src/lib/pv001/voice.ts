@@ -1,3 +1,5 @@
+import { spokenText } from "./spoken-text";
+
 type ResultEvent = { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> };
 export type Recognition = {
   lang: string;
@@ -43,7 +45,7 @@ export function speak(text: string, onError: () => void, voiceURI?: string) {
     ) ??
     voices.find((v) => /^pt[-_]BR$/i.test(v.lang)) ??
     voices[0];
-  const utterance = new SpeechSynthesisUtterance(text.replace(/doutor\(a\)/gi, "doutor"));
+  const utterance = new SpeechSynthesisUtterance(spokenText(text));
   utterance.lang = "pt-BR";
   utterance.rate = 0.95;
   if (voice) utterance.voice = voice;

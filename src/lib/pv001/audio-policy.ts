@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LINES, type LineId } from "./case";
+import { spokenText } from "./spoken-text";
 
 export const speechInput = z.object({
   lineIds: z
@@ -9,10 +10,7 @@ export const speechInput = z.object({
   emotion: z.enum(["anxious", "reassured", "collaborative", "withdrawn"]),
 });
 export function speechText(data: z.infer<typeof speechInput>) {
-  return data.lineIds
-    .map((id) => LINES[id])
-    .join(" ")
-    .replace(/doutor\(a\)/gi, "doutor");
+  return spokenText(data.lineIds.map((id) => LINES[id]).join(" "));
 }
 export const MAX_AUDIO_BYTES = 2 * 1024 * 1024;
 export function validateRecording(data: unknown): File {
