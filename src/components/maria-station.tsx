@@ -22,7 +22,23 @@ import {
   STORAGE_PREFIX,
   type RecordEnvelope,
 } from "@/lib/pv001/persistence";
-import { recognitionConstructor, speak, stopSpeech, type Recognition } from "@/lib/pv001/voice";
+import {
+  recognitionConstructor,
+  speak,
+  stopSpeech,
+  availableVoices,
+  microphoneMessage,
+  openMicrophone,
+  recordMicrophone,
+  playNaturalSpeech,
+  type Recognition,
+  type Recording,
+} from "@/lib/pv001/voice";
+import {
+  audioCapabilities,
+  renderMariaSpeech,
+  transcribeStudent,
+} from "@/lib/pv001/audio.functions";
 
 const box = "rounded-md bg-card p-4 ring-1 ring-line";
 const button = "rounded-md bg-raise px-4 py-2 text-sm ring-1 ring-line disabled:opacity-40";
@@ -56,6 +72,12 @@ export function MariaStation() {
   const [voice, setVoice] = useState(true);
   const [listening, setListening] = useState(false);
   const [voiceAvailable, setVoiceAvailable] = useState(false);
+  const [naturalVoice, setNaturalVoice] = useState(false);
+  const [voiceURI, setVoiceURI] = useState("");
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [micStatus, setMicStatus] = useState("Verificando compatibilidade de áudio…");
+  const [micPending, setMicPending] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reflection, setReflection] = useState("");
   const [debrief, setDebrief] = useState("");
@@ -64,9 +86,14 @@ export function MariaStation() {
   const [reviewItems, setReviewItems] = useState<Judgment[]>([]);
   const [saved, setSaved] = useState<ReturnType<typeof sessionIndex>>([]);
   const recognition = useRef<Recognition | null>(null);
+  const recording = useRef<Recording | null>(null);
+  const voiceGeneration = useRef(0);
   const chat = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const evaluate = useServerFn(evaluateMaria);
+  const capabilities = useServerFn(audioCapabilities);
+  const renderSpeech = useServerFn(renderMariaSpeech);
+  const transcribe = useServerFn(transcribeStudent);
 
   const commit = useCallback((next: RecordEnvelope) => {
     // Ref is updated synchronously: timer, speech and text always use the same latest state.
@@ -102,14 +129,23 @@ export function MariaStation() {
     [commit],
   );
   const stopVoice = useCallback(() => {
-    recognition.current?.abort();
+    voiceGeneration.current++;
+    if (recognition.current) {
+      recognition.current.onend = null;
+      recognition.current.onresult = null;
+      recognition.current.onerror = null;
+      recognition.current.abort();
+    }
     recognition.current = null;
+    recording.current?.cancel();
+    recording.current = null;
     setListening(false);
+    setMicPending(false);
+    setTranscribing(false);
     stopSpeech();
   }, []);
   useEffect(() => {
     setReady(true);
-    setVoiceAvailable(window.isSecureContext && !!recognitionConstructor());
     try {
       setSaved(sessionIndex(localStorage));
     } catch {
@@ -130,6 +166,37 @@ export function MariaStation() {
     };
   }, [commit, stopVoice]);
   useEffect(() => {
+    let mounted = true;
+    const refreshVoices = () => setVoices(availableVoices());
+    refreshVoices();
+    window.speechSynthesis?.addEventListener("voiceschanged", refreshVoices);
+    const setup = (natural: boolean) => {
+      if (!mounted) return;
+      setNaturalVoice(natural);
+      const secure = window.isSecureContext;
+      const capture = !!navigator.mediaDevices?.getUserMedia;
+      const supported =
+        !!recognitionConstructor() || (natural && typeof MediaRecorder !== "undefined");
+      setVoiceAvailable(secure && capture && supported);
+      setMicStatus(
+        !secure
+          ? "Este endereço HTTP da rede bloqueia o microfone. No computador, use http://127.0.0.1:4173/caso/PV-001. No iPhone, é necessário um endereço HTTPS."
+          : !capture
+            ? "Este navegador não permite capturar áudio. Abra o endereço da consulta no Edge ou Chrome do computador."
+            : !supported
+              ? "Este navegador não oferece reconhecimento de fala e a transcrição alternativa ainda não está configurada. Abra a consulta no Edge ou Chrome. Você pode testar o microfone abaixo."
+              : "Teste o microfone antes de começar. Durante a consulta, clique em Falar com Maria e depois em Concluir fala.",
+      );
+    };
+    void capabilities()
+      .then((value) => setup(value.natural))
+      .catch(() => setup(false));
+    return () => {
+      mounted = false;
+      window.speechSynthesis?.removeEventListener("voiceschanged", refreshVoices);
+    };
+  }, [capabilities]);
+  useEffect(() => {
     chat.current?.scrollTo({ top: chat.current.scrollHeight, behavior: "smooth" });
   }, [record?.session.transcript.length]);
 
@@ -142,6 +209,50 @@ export function MariaStation() {
       reviews: [],
     });
   }
+  async function sayPatient(turn: Session["transcript"][number], emotion: Session["emotion"]) {
+    const generation = voiceGeneration.current;
+    const failed = () => {
+      setNotice(
+        "Não foi possível tocar a resposta. Ela permanece na transcrição; use Ouvir novamente.",
+      );
+      technical("speech_error", "Reprodução indisponível");
+    };
+    if (!naturalVoice) {
+      speak(turn.text, failed, voiceURI);
+      return;
+    }
+    try {
+      const audio = await renderSpeech({ data: { lineIds: turn.lineIds, emotion } });
+      if (
+        generation !== voiceGeneration.current ||
+        current.current?.session.mode !== "patient_mode"
+      )
+        return;
+      await playNaturalSpeech(audio);
+    } catch {
+      if (generation === voiceGeneration.current) failed();
+    }
+  }
+  async function testMicrophone() {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) return;
+    stopVoice();
+    const generation = voiceGeneration.current;
+    setMicPending(true);
+    setMicStatus("Aguardando permissão do navegador para testar o microfone…");
+    try {
+      const stream = await openMicrophone();
+      const label = stream.getAudioTracks()[0]?.label;
+      stream.getTracks().forEach((track) => track.stop());
+      if (generation !== voiceGeneration.current) return;
+      setMicStatus(
+        `Microfone acessível${label ? `: ${label}` : ""}. ${voiceAvailable ? "Pronto para iniciar uma fala." : "Falta o serviço de reconhecimento neste navegador; abra no Edge ou Chrome."}`,
+      );
+    } catch (error) {
+      if (generation === voiceGeneration.current) setMicStatus(microphoneMessage(error));
+    } finally {
+      if (generation === voiceGeneration.current) setMicPending(false);
+    }
+  }
   function send(text = input) {
     const value = current.current;
     if (!value || !text.trim()) return;
@@ -152,19 +263,91 @@ export function MariaStation() {
       commit({ ...value, session: next });
       const last = next.transcript.at(-1);
       if (voice && next.mode === "patient_mode" && last?.role === "patient")
-        speak(last.text, () => {
-          setNotice("Áudio indisponível. A resposta permanece na transcrição.");
-          technical("speech_error", "Síntese de voz indisponível");
-        });
+        void sayPatient(last, next.emotion);
     } catch (e) {
       setError((e as Error).message);
     }
   }
-  function listen() {
+  async function listen() {
     if (listening) {
+      recording.current?.stop();
       recognition.current?.stop();
       return;
     }
+    if (
+      !voiceAvailable ||
+      micPending ||
+      transcribing ||
+      current.current?.session.mode !== "patient_mode"
+    )
+      return;
+    stopVoice();
+    const generation = voiceGeneration.current;
+    setMicPending(true);
+    setMicStatus("Aguardando acesso ao microfone…");
+    let stream: MediaStream;
+    try {
+      stream = await openMicrophone();
+    } catch (error) {
+      if (generation === voiceGeneration.current) {
+        setMicPending(false);
+        setMicStatus(microphoneMessage(error));
+      }
+      return;
+    }
+    if (
+      generation !== voiceGeneration.current ||
+      current.current?.session.mode !== "patient_mode"
+    ) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    setMicPending(false);
+    setMicStatus(
+      naturalVoice
+        ? "Ouvindo… Clique em Concluir fala quando terminar. Cada gravação dura até 45 segundos."
+        : "Ouvindo… Clique em Concluir fala quando terminar. O navegador também pode enviar a fala ao detectar uma pausa.",
+    );
+    if (naturalVoice && typeof MediaRecorder !== "undefined") {
+      try {
+        const capture = recordMicrophone(stream);
+        recording.current = capture;
+        setListening(true);
+        const blob = await capture.result;
+        if (generation !== voiceGeneration.current) return;
+        recording.current = null;
+        setListening(false);
+        if (!blob?.size) {
+          setMicStatus("Gravação vazia ou acima do limite. Tente uma fala mais curta.");
+          return;
+        }
+        setTranscribing(true);
+        setMicStatus("Transcrevendo sua fala…");
+        const data = new FormData();
+        data.append("audio", blob, "fala");
+        const text = await transcribe({ data });
+        if (
+          generation !== voiceGeneration.current ||
+          current.current?.session.mode !== "patient_mode"
+        )
+          return;
+        setTranscribing(false);
+        setMicStatus(
+          text
+            ? "Fala transcrita e enviada. Você pode iniciar a próxima fala."
+            : "Nenhuma fala reconhecida. Tente novamente.",
+        );
+        if (text) send(text);
+      } catch {
+        if (generation === voiceGeneration.current) {
+          setListening(false);
+          setTranscribing(false);
+          setMicStatus("Não foi possível transcrever. Tente novamente ou use o texto.");
+        }
+      }
+      return;
+    }
+    stream.getTracks().forEach((track) => track.stop());
     const Constructor = recognitionConstructor();
     if (!Constructor || current.current?.session.mode !== "patient_mode") return;
     stopSpeech();
@@ -175,6 +358,7 @@ export function MariaStation() {
     rec.interimResults = true;
     let final = "";
     rec.onresult = (event) => {
+      if (generation !== voiceGeneration.current) return;
       let draft = "";
       final = "";
       for (const result of Array.from(event.results)) {
@@ -184,22 +368,26 @@ export function MariaStation() {
       setInput(draft);
     };
     rec.onerror = (event) => {
-      setNotice("Não foi possível reconhecer a voz. Use o campo de texto.");
+      setMicStatus(microphoneMessage(event.error));
       technical("recognition_error", event.error);
       final = "";
     };
     rec.onend = () => {
+      if (generation !== voiceGeneration.current) return;
       recognition.current = null;
       setListening(false);
       // Never deliver a delayed speech result after the timer has closed the encounter.
-      if (final.trim() && current.current?.session.mode === "patient_mode") send(final);
+      if (final.trim() && current.current?.session.mode === "patient_mode") {
+        setMicStatus("Fala enviada. Você pode iniciar a próxima fala.");
+        send(final);
+      }
     };
     try {
       rec.start();
       setListening(true);
-    } catch {
+    } catch (error) {
       setListening(false);
-      setNotice("Microfone indisponível. Use o campo de texto.");
+      setMicStatus(microphoneMessage(error));
       technical("microphone_error", "Não foi possível iniciar captura");
     }
   }
@@ -237,6 +425,61 @@ export function MariaStation() {
   }
   const s = record?.session;
   const active = s?.mode === "patient_mode";
+  const audioSettings = (
+    <section className={`${box} space-y-3`} aria-label="Áudio e microfone">
+      <h2 className="font-semibold">Áudio e microfone</h2>
+      <p className="text-sm" role="status">
+        {micStatus}
+      </p>
+      <div className="flex flex-wrap gap-3">
+        <button
+          className={button}
+          disabled={!ready || micPending || listening || transcribing}
+          onClick={testMicrophone}
+        >
+          {micPending ? "Aguardando permissão…" : "Testar microfone"}
+        </button>
+        <button
+          className={button}
+          disabled={!ready || listening || micPending || transcribing}
+          onClick={() =>
+            speak(
+              "Olá, sou Maria. Você consegue me ouvir?",
+              () => setNotice("Não foi possível reproduzir áudio neste navegador."),
+              voiceURI,
+            )
+          }
+        >
+          Testar som do navegador
+        </button>
+      </div>
+      {!naturalVoice && (
+        <label className="block text-sm">
+          Voz de Maria no navegador
+          <select
+            className={`${field} mt-1`}
+            value={voiceURI}
+            onChange={(e) => {
+              stopSpeech();
+              setVoiceURI(e.target.value);
+            }}
+          >
+            <option value="">Automática — português brasileiro</option>
+            {voices.map((v) => (
+              <option key={v.voiceURI} value={v.voiceURI}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <p className="text-xs">
+        {naturalVoice
+          ? "Voz sintética natural ativada. Suas gravações serão enviadas à OpenAI para transcrição; esta aplicação conserva a transcrição, sem salvar o áudio."
+          : "Voz sintética do navegador. A voz natural ainda não foi ativada nesta prévia. O reconhecimento do navegador pode processar sua fala externamente."}
+      </p>
+    </section>
+  );
   return (
     <main className="mx-auto min-h-screen max-w-6xl space-y-4 bg-background px-4 py-5 text-foreground">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -291,10 +534,7 @@ export function MariaStation() {
               placeholder="Ex.: interno-01"
             />
           </label>
-          <p className="text-sm">
-            A voz usa o serviço de reconhecimento do navegador, que pode processar áudio
-            externamente. O texto permanece disponível como contingência.
-          </p>
+          {audioSettings}
           <button className={button} disabled={!participant.trim()} onClick={() => setIntro(true)}>
             Iniciar abertura
           </button>
@@ -379,6 +619,7 @@ export function MariaStation() {
                 alt="Maria, paciente fictícia, sentada no ambulatório segurando a bolsa"
                 className="w-full rounded-md"
               />
+              {active && audioSettings}
               <section className={`${box} space-y-2`}>
                 <h2 className="font-semibold">Recursos da consulta</h2>
                 {(Object.keys(PV001.resources) as (keyof typeof PV001.resources)[]).map((id) => (
@@ -434,8 +675,31 @@ export function MariaStation() {
               {active && (
                 <>
                   <div className="flex flex-wrap items-center gap-3">
-                    <button className={button} disabled={!voiceAvailable} onClick={listen}>
-                      {listening ? "Concluir fala" : "Falar com Maria"}
+                    <button
+                      className={button}
+                      disabled={!voiceAvailable || micPending || transcribing}
+                      onClick={listen}
+                    >
+                      {listening
+                        ? "Concluir fala"
+                        : transcribing
+                          ? "Transcrevendo…"
+                          : "Falar com Maria"}
+                    </button>
+                    <button
+                      className={button}
+                      disabled={listening || micPending || transcribing}
+                      onClick={() => {
+                        const last = [...s.transcript]
+                          .reverse()
+                          .find((turn) => turn.role === "patient");
+                        if (last) {
+                          stopVoice();
+                          void sayPatient(last, s.emotion);
+                        }
+                      }}
+                    >
+                      Ouvir novamente
                     </button>
                     <label className="text-sm">
                       <input
@@ -443,7 +707,9 @@ export function MariaStation() {
                         checked={voice}
                         onChange={(e) => {
                           setVoice(e.target.checked);
-                          if (!e.target.checked) stopSpeech();
+                          if (!e.target.checked) {
+                            stopVoice();
+                          }
                         }}
                       />{" "}
                       Ouvir Maria

@@ -67,6 +67,8 @@ Este mecanismo **não é um prontuário institucional, serviço multiusuário ou
 
 ## Audiovisual
 
+Revisão após a avaliação inicial do autor: [configuração e limites de áudio](audio-pilot.md) e [roteiro do vídeo com movimento](abertura-producao.md). Foram acrescentados teste de microfone, diagnóstico de permissões, seleção de voz, repetição de resposta e integração opcional de transcrição/voz natural. O serviço pago ainda não foi ativado; o vídeo em movimento ainda não foi gerado. A verdade clínica continua na versão 1.1, sem alteração.
+
 Vídeo MP4 de 9 segundos, imagem fictícia de Maria tensa segurando a bolsa, áudio sintético pt-BR e legenda com a abertura exata. Após o vídeo, permanece a mesma imagem. O vídeo é uma composição de retrato estático e voz; **não é atuação filmada nem animação labial**. Essa limitação precisa de aceite pedagógico para o piloto.
 
 Imagem produzida com a ferramenta integrada imagegen. Prompt completo: `media-provenance.md`. Áudio local gerado com Microsoft Maria Desktop; “Doutor(a)” é vocalizado como “Doutora”. Não se utiliza voz de pessoa real nem se acrescenta conteúdo clínico.
