@@ -1,4 +1,4 @@
-# PV-001 v1.1 — implementação e limites do pré-piloto
+# PV-001 — implementação e limites do pré-piloto (v1.1 e v1.2)
 
 O cenário de Maria foi acrescentado ao módulo `virtual-patient-pal`, preservando a arquitetura de estações por caso já usada por Théo. Versão ativa: **1.1**. As especificações originais v1.0 e o adendo v1.1 foram preservados integralmente em `specifications/`. Não havia implementação nem sessões reais de Maria no checkout de origem (`491d70f`).
 
@@ -101,6 +101,43 @@ Evidências automatizadas finais: `verification.json`. Exemplos: `test-sessions.
 3. Aceite ou substituição do vídeo composto por retrato/voz por atuação audiovisual, se esta for necessária à fidelidade pretendida.
 4. Configurar e testar o gateway do avaliador com transcrições sintéticas e revisar a qualidade dos julgamentos. Falta de chave não deve bloquear a consulta nem produzir notas fictícias.
 5. Definir responsável pela exportação/guarda e revisão humana. O piloto técnico não equivale à autorização de uso institucional nem à avaliação certificadora.
+
+## v1.2 — intérprete de intenção por IA e acesso SUS (30/09/2026)
+
+**O que mudou**
+
+- `version` 1.2 / `engineVersion` 1.2.0. Especificação em `specifications/v1.2-adendo.txt`; v1.0 e v1.1 preservadas. `PV001_V11` guarda a especificação v1.1 idêntica, byte a byte, para abrir sessões antigas. Verdade clínica, recursos e `LINES` inalterados (verificado por teste).
+- Item `acesso` do checklist com o gabarito do autor (PCDT de DRC/CEAF); os outros 11 critérios são idênticos. O avaliador usa o checklist e o gabarito **da versão da sessão**: v1.1 mantém "Não inventar regras de dispensação local".
+- Intérprete de intenção por modelo (`src/lib/pv001/intent.ts`, `intent.functions.ts`, `intent-provider.server.ts`), desligado por padrão. Recebe só a fala atual e um resumo de fase/flags; não recebe gabarito, checklist nem falas. Devolve **somente** JSON com os 13 sinais booleanos e `historyRequests` (restrito às 12 falas de anamnese), validado por zod estrito e por `sanitizeIntent` no motor. Qualquer chave extra, valor não booleano ou id fora da lista invalida a saída.
+- O motor continua escolhendo as falas de `LINES`. Pisos de segurança: injeção e alarmismo detectados pelas regex valem mesmo que o modelo não os detecte.
+- Fallback para regex: desligado, sem chave, timeout de 4 s (servidor) / 5,5 s (navegador), erro, saída inválida ou limite de 600 chamadas/hora por processo. Cada turno registra em `technicalEvents` o intérprete usado (`llm:<modelo>` ou `regex:<motivo>`).
+- O relógio usa o instante do envio, não o da resposta do intérprete. O botão fica em "Interpretando…" durante a espera.
+- A IA também detecta "pergunta técnica" e "tem cara de pergunta", antes feitos por regex dentro de `respond()`.
+- Sessões v1.1 abrem para leitura, exportação, reflexão/debriefing e revisão, com o checklist v1.1; a consulta não é retomada e o relógio não avança (`openRecord`). Snapshot adulterado continua recusado.
+- Prebriefing informa o processamento externo das falas.
+
+**Configuração (somente servidor, arquivo `.env` local não versionado)**
+
+```
+PV001_LLM_INTENT=true
+MIMO_API_KEY=<chave>                      # ou PV001_INTENT_API_KEY
+PV001_INTENT_MODEL=mimo-v2-flash          # opcional
+PV001_INTENT_BASE_URL=https://api.xiaomimimo.com/v1   # opcional; qualquer API compatível com OpenAI
+```
+
+**Acurácia das regex no corpus** (`paraphrase-corpus.json`, 70 falas; detalhe em `intent-eval.md`): 29 de 70 falas com detecção inteiramente correta (41%). Sensibilidade mais baixa em acesso (2/8), alarmismo (1/5), itens de anamnese (4/12) e pergunta técnica (1/3). O corpus foi escrito para expor paráfrases; mede a lacuna, não o desempenho com estudantes reais. Os rótulos são do autor do caso e pedem revisão docente.
+
+**Teste com IA real: pendente.** `src/lib/__tests__/pv001-intent-live.test.ts` roda o corpus contra o modelo configurado e imprime a mesma tabela; é ignorado sem chave. Nenhum resultado foi estimado.
+
+**Verificação desta etapa.** Os testes do motor, do avaliador, do Théo e os 13 novos testes de intenção passam (107 testes em 4 arquivos, executados com o runner do Bun). O caminho por regex foi comparado ao motor v1.1 em 70 falas isoladas e numa conversa longa: transcrição, flags e emoção idênticas. Lint e prettier sem erros nos arquivos alterados. **Não executados neste ambiente**: `bun run test` com vitest (os testes de áudio e captura de fala usam APIs do vitest que o runner do Bun não oferece; as mesmas 13 falhas ocorrem no commit anterior), `tsc` completo e `bun run build`, porque as dependências não puderam ser instaladas (o `bun.lock` aponta para o repositório privado da Lovable). Rodar os três no equipamento do autor antes do merge.
+
+**Limitações que continuam**
+
+- A Maria **fala só as 31 frases do catálogo**. A IA melhora o entendimento, não a naturalidade da resposta. Perguntas fora do roteiro continuam recebendo "Isso eu não sei dizer" ou "Estou ouvindo".
+- O intérprete por modelo não foi testado com chave real; acurácia, latência e custo reais são desconhecidos.
+- Com a IA ligada, a fala do estudante vai a um serviço externo. Sem autenticação institucional nem cota por usuário.
+- A paciente reage igual a uma orientação de acesso correta ou errada; a correção depende do avaliador e do debriefing.
+- Os exemplos em `test-sessions.*` são da v1.1 e não foram regenerados.
 
 ## Referências técnicas consultadas
 

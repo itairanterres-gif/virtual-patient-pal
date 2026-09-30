@@ -1,0 +1,30 @@
+ADENDO — PV-001 v1.2 | Maria Aparecida Souza
+Autor do gabarito: Itairan Terres (endocrinologista). Registrado em 30/09/2026.
+As especificações v1.0 e v1.1 permanecem válidas, exceto nos pontos abaixo. Dados clínicos (Clinical Truth Lock) e falas da paciente NÃO mudam.
+
+1. Acesso ao iSGLT2 no SUS — gabarito do autor
+- O iSGLT2 (dapagliflozina 10 mg) está disponível pelo PCDT de Estratégias para Atenuar a Progressão da Doença Renal Crônica (Portaria Conjunta SAES/SECTICS nº 11/2024).
+- Critérios: TFG entre 25 e 75 mL/min, DM2, uso de IECA/BRA. Maria preenche todos (TFGe 49; losartana 50 mg 12/12h = 100 mg/dia). CID N18.3.
+- A dispensação é pelo CEAF (Componente Especializado da Assistência Farmacêutica): LME, laudo, termo de consentimento, receita para 6 meses, renovação semestral, retirada na farmácia do componente especializado.
+- NÃO sai da farmácia da UBS. A APS pode prescrever.
+
+2. Checklist — item "acesso" (substitui o texto v1.1)
+"Identifica a via de acesso gratuito ao iSGLT2 no SUS (PCDT de DRC/CEAF) e orienta a paciente sobre documentação e local de retirada, construindo um plano factível."
+- "Vou verificar se tem no SUS" sem via concreta = no máximo PA.
+- Dizer que "tem no postinho/farmácia da UBS" = I.
+Os demais 11 critérios permanecem idênticos aos da v1.1.
+
+3. Prompt do avaliador
+A frase "Não inventar regras de dispensação local" é substituída pelo gabarito do item 1 e pelas regras do item 2.
+
+4. Paciente
+As falas de Maria não mudam. Ela não sabe o que é CEAF. Reage da mesma forma a uma orientação de acesso correta ou incorreta; o erro é tratado pelo avaliador e no debriefing.
+
+5. Intérprete de intenção
+Opcionalmente, a detecção do que o estudante disse pode ser feita por modelo de linguagem (desligado por padrão). O modelo só classifica; não gera fala. Sem configuração, timeout, erro ou saída inválida, vale o intérprete por regras da v1.1.
+
+6. Prebriefing
+Acrescentada a frase: "Suas falas podem ser processadas por um serviço externo de IA apenas para interpretar o que você perguntou. As respostas da paciente vêm sempre de um roteiro fixo, escrito pelo autor do caso."
+
+7. Compatibilidade
+Sessões registradas em v1.1 continuam abrindo para leitura, exportação e revisão, avaliadas pelo checklist v1.1. Não são retomadas nem migradas pelo motor v1.2.

@@ -10,14 +10,21 @@
     "tests_passed": 77,
     "failures": 0
   },
-  "typecheck": { "command": "tsc --noEmit", "passed": true },
+  "typecheck": {
+    "command": "tsc --noEmit",
+    "passed": true
+  },
   "lint": {
     "command": "eslint .",
     "errors": 0,
     "warnings": 6,
     "warnings_scope": "pre-existing react-refresh warnings in UI components"
   },
-  "production_build": { "command": "bun run build", "passed": true, "deployed": false },
+  "production_build": {
+    "command": "bun run build",
+    "passed": true,
+    "deployed": false
+  },
   "browser": {
     "engine": "Microsoft Edge, Playwright headless",
     "desktop_viewport": [1280, 900],
@@ -36,7 +43,11 @@
       "no horizontal mobile overflow"
     ],
     "uncaught_page_errors": 0,
-    "video": { "duration_seconds": 9, "width": 1280, "height": 720 },
+    "video": {
+      "duration_seconds": 9,
+      "width": 1280,
+      "height": 720
+    },
     "real_microphone_tested": false,
     "speech_quality_reviewed_by_human": false
   },
@@ -51,5 +62,45 @@
     "reviewer identity is self-declared",
     "intro is a static portrait with synthetic speech, not filmed acting",
     "automated checklist is only a suggestion for mandatory human review"
-  ]
+  ],
+  "v1_2": {
+    "case_version": "1.2",
+    "engine_version": "1.2.0",
+    "verification_date": "2026-09-30",
+    "base_commit": "2b29be47745812b3ff958b14902b6e4e38266ce8",
+    "tests_run_with": "bun test (runner do Bun, compatível com a API do vitest usada nestes arquivos)",
+    "tests": {
+      "files": [
+        "pv001-intent.test.ts",
+        "pv001-patient.test.ts",
+        "pv001-evaluation.test.ts",
+        "theo-engine.test.ts"
+      ],
+      "passed": 107,
+      "failures": 0
+    },
+    "regex_parity_with_v1_1": {
+      "isolated_utterances": 70,
+      "differences": 0,
+      "long_conversation_identical": true
+    },
+    "regex_corpus_accuracy": {
+      "corpus": "docs/pv001/paraphrase-corpus.json",
+      "items": 70,
+      "exact": 29
+    },
+    "llm_intent_live_test": "pending: sem chave configurada",
+    "lint": {
+      "scope": "arquivos alterados",
+      "errors": 0
+    },
+    "not_run_here": ["vitest (bun run test)", "tsc --noEmit completo", "bun run build"],
+    "not_run_reason": "dependências não instaladas: bun.lock aponta para registro privado da Lovable",
+    "pre_existing_bun_runner_failures": {
+      "count": 13,
+      "files": ["pv001-audio.test.ts", "pv001-speech-capture.test.ts"],
+      "reason": "APIs do vitest ausentes no runner do Bun; idênticas no commit 2b29be4"
+    },
+    "deployed": false
+  }
 }
