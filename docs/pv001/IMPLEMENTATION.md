@@ -121,7 +121,7 @@ Evidências automatizadas finais: `verification.json`. Exemplos: `test-sessions.
 ```
 PV001_LLM_INTENT=true
 MIMO_API_KEY=<chave>                      # ou PV001_INTENT_API_KEY
-PV001_INTENT_MODEL=mimo-v2-flash          # opcional
+PV001_INTENT_MODEL=mimo-v2.6-flash          # opcional
 PV001_INTENT_BASE_URL=https://api.xiaomimimo.com/v1   # opcional; qualquer API compatível com OpenAI
 ```
 

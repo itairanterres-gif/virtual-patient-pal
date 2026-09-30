@@ -17,7 +17,7 @@ import {
 export const INTENT_TIMEOUT_MS = 4000;
 export const INTENT_DEFAULTS = {
   baseURL: "https://api.xiaomimimo.com/v1",
-  model: "mimo-v2-flash",
+  model: "mimo-v2.6-flash",
 } as const;
 
 export const intentState = z
