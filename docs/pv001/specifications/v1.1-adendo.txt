@@ -1,0 +1,153 @@
+ADENDO — PV-001 v1.1 | Maria Aparecida Souza
+A primeira instrução de implementação do PV-001 já foi enviada e permanece válida exceto nos pontos explicitamente atualizados abaixo. Não refaça arquitetura nem descarte componentes já corretos. Aplique estas mudanças como atualização incremental do caso, preservando versionamento e rastreabilidade.
+Substituir os três objetivos anteriores por um único objetivo integrador:
+“Ao final da simulação, o interno deverá priorizar e comunicar um plano terapêutico cardiorrenal individualizado e factível no SUS para uma pessoa com DM2 e doença renal do diabetes, considerando seu risco cardiovascular, suas preferências e suas barreiras de acesso ao tratamento.”
+Esta mudança é deliberada para uma cena de 15 minutos: estratificar risco, individualizar terapia e comunicar passam a ser etapas do raciocínio necessário para atingir um único objetivo.
+Substituir os dados clínicos anteriores pelos seguintes:
+-  Maria Aparecida Souza, 61 anos.
+-  Aposentada, ex-auxiliar de serviços gerais.
+-  DM2 há 8 anos.
+-  Hipertensão arterial.
+-  Dislipidemia.
+-  Mora com o marido; filha próxima auxilia nas idas à unidade de saúde.
+-  Medicações atuais:
+  -  metformina 1000 mg 12/12h;
+  -  losartana 50 mg 12/12h.
+-  HbA1c: 8,2%.
+-  Creatinina: 1,25 mg/dL.
+-  TFGe atual: 49 mL/min/1,73m².
+-  RAC atual: 45 mg/g.
+-  Colesterol total: 240 mg/dL.
+-  LDL-c: 162 mg/dL.
+-  PA: 148/92 mmHg.
+Adicionar também ao Clinical Truth Lock:
+-  exame de 4 meses atrás:
+  -  TFGe: 49 mL/min/1,73m²;
+  -  RAC: 52 mg/g.
+Esses dados prévios demonstram cronicidade da doença renal e não devem ser omitidos do caso.
+Para o avaliador/tutor, mas não para a paciente:
+-  a paciente é de alto risco cardiovascular;
+-  há dois estratificadores relevantes: HAS + estratificador renal;
+-  não classificá-la como muito alto risco;
+-  o tempo de DM2 é de 8 anos e, portanto, não atinge o critério de >10 anos descrito no caso;
+-  meta de LDL esperada no cenário: <70 mg/dL, com estatina de alta potência.
+Isso é informação de bastidor para avaliação e debriefing, não deve ser dita espontaneamente por Maria.
+O PV-001 não deve mais tentar representar uma consulta abrangente de diabetes.
+Retirar como focos obrigatórios:
+-  neuropatia;
+-  pé diabético;
+-  retinopatia;
+-  obesidade como alvo central;
+-  insuficiência cardíaca;
+-  encaminhamento amplo em rede;
+-  investigação extensa de complicações.
+O cenário foi deliberadamente recortado para avaliar priorização terapêutica, raciocínio cardiorrenal, comunicação e factibilidade no SUS. Cada elemento adicional dilui a competência observável em 15 minutos.
+Substituir a máquina narrativa mais ampla por três momentos sequenciais, cada um com um comportamento observável.
+Gatilho inicial:
+“Doutor(a), falaram que meu rim não está bom. Vou acabar fazendo diálise?”
+O sistema deve observar:
+-  se o estudante identifica e acolhe o medo;
+-  se explica a doença renal sem alarmismo;
+-  se evita avançar diretamente para prescrição.
+Se acolhida:
+-  Maria relaxa e coopera.
+Se ignorada:
+-  Maria reintroduz o tema mais tarde;
+-  progressivamente fica mais fechada.
+Quando o estudante anunciar ajuste do tratamento:
+“Mas eu já tomo remédio para diabetes. Por que outro?”
+O sistema deve distinguir:
+-  resposta glicocêntrica: “porque sua glicose está alta”;
+-  resposta cardiorrenal: explicação de que a mudança também visa proteção renal e cardiovascular.
+Se a explicação for cardiorrenal, Maria responde de modo compatível com compreensão:
+“Ah, então não é só pelo açúcar.”
+Ao ser proposta nova medicação:
+“Esse remédio tem no postinho? Eu não consigo ficar comprando remédio caro.”
+O sistema deve observar:
+-  se o estudante verifica acesso;
+-  se constrói plano factível;
+-  se considera SUS e decisão compartilhada.
+Esses três momentos substituem a lógica anterior mais dispersa.
+Remover “resistência à insulina” como ramo central da máquina de estados.
+A insulina não é gatilho planejado desta cena.
+Se o estudante espontaneamente propuser insulina, Maria pode responder apenas com preocupação leve:
+“Insulina, doutor(a)? Ai, não sei...”
+Não travar a consulta e não prolongar esse tema.
+O foco permanece cardiorrenal.
+Substituir integralmente o checklist anterior pelo seguinte:
+-  Estabelece vínculo e identifica a principal preocupação da paciente, o medo em relação ao rim, antes de avançar para a conduta.
+-  Utiliza comunicação compreensível e busca decisão compartilhada, não apenas informativa.
+-  Reconhece o significado da TFGe e da albuminúria persistentes como doença renal do diabetes já estabelecida, não achado isolado.
+-  Identifica o risco cardiovascular aumentado no contexto global da paciente, HAS + estratificador renal, e não apenas pela HbA1c.
+-  Prioriza terapia com benefício cardiorrenal comprovado e disponível no SUS, classe iSGLT2, sem exigir nome de molécula ou marca.
+-  Mantém/ajusta o tratamento glicêmico considerando a função renal atual.
+-  Identifica necessidade de intensificar prevenção cardiovascular:
+  -  LDL <70 mg/dL;
+  -  estatina de alta potência;
+  -  controle pressórico.
+-  Verifica acesso/custo no SUS e constrói plano terapêutico factível.
+-  Organiza monitorização e reavaliação após a mudança terapêutica.
+-  Explica que o ajuste visa proteção cardiovascular e renal, e não apenas controle glicêmico.
+-  Aborda adequadamente o medo de progressão renal/diálise, sem alarmismo.
+-  Apresenta plano final coerente e compreensível.
+Manter classificação NR / I / PA / A e exigência de evidência textual para cada julgamento.
+Usar:
+“Você é o médico responsável pela consulta de retorno de uma paciente com DM2 na atenção ambulatorial do SUS. Foram realizados exames recentemente. Conduza a consulta e estabeleça o plano de cuidado.”
+Não antecipar:
+-  iSGLT2;
+-  doença renal;
+-  alto risco cardiovascular;
+-  meta de LDL;
+-  necessidade de mudança terapêutica específica.
+Manter prebriefing de segurança psicológica:
+-  ficção assumida;
+-  ambiente sem julgamento;
+-  confidencialidade do desempenho fora do grupo;
+-  liberdade para solicitar informações/exames adicionais durante a cena.
+Substituir o debriefing anterior por esta sequência:
+-  Como foi para você essa consulta?
+-  Em que momento ficou mais difícil?
+-  O que nos exames fez você mudar a prioridade terapêutica?
+-  Se tivesse olhado apenas a HbA1c, o que teria feito de diferente?
+-  O que mudou na consulta quando a paciente falou do rim?
+-  E quando falou do custo do remédio?
+-  Qual princípio desta consulta você leva para o próximo paciente com diabetes que atender na UBS?
+-  Se esta fosse sua paciente na atenção primária, o que você organizaria para o seguimento dela?
+Manter debriefing como momento formativo e separado do checklist.
+Incorporar ao MVP:
+- vídeo introdutório curto de 5–10 segundos;
+-  Maria aparece tensa, em ambiente ambulatorial, segurando a bolsa ou com postura equivalente;
+-  o vídeo termina com a fala:
+“Doutor(a), falaram que meu rim não está bom. Vou acabar fazendo diálise?”
+-  após a fala, congelar em imagem estática da mesma Maria;
+-  interação principal por voz bidirecional;
+-  manter transcrição paralela obrigatória;
+-  chat textual como contingência;
+-  não exigir avatar animado contínuo no MVP.
+Se tecnicamente simples, podem existir poucas imagens estáticas coerentes com os estados:
+-  tensa;
+-  mais tranquila;
+-  mais fechada/preocupada.
+Não permitir que a troca de imagem altere o conteúdo clínico ou a lógica do caso.
+Permanecem válidos:
+-  separação paciente / Clinical Truth Lock / avaliador / tutor;
+-  regra de não invenção;
+-  paciente não ensina;
+-  avaliação baseada em evidências;
+-  log completo;
+-  versionamento;
+-  relógio de 15 minutos;
+-  encerramento explícito da cena;
+-  mudança para reflection_mode apenas depois do encerramento;
+-  revisão humana da avaliação automatizada no piloto;
+-  proibição de redesenhar arquitetura global.
+Registrar esta atualização como nova versão do caso:
+PV-001 v1.1 — Maria Aparecida Souza
+Não sobrescrever silenciosamente sessões realizadas com versão anterior.
+Se ainda não houver sessões reais com v1.0, manter mesmo assim o histórico da especificação.
+Comparar este adendo com a implementação atual e trazer uma lista curta:
+-  o que já está compatível;
+-  o que precisa ser alterado;
+-  o que precisa ser removido;
+-  se alguma mudança proposta colide com a arquitetura existente.
+Depois, aplicar as alterações incrementalmente e testar novamente os três momentos centrais da cena.

@@ -7,6 +7,8 @@ import { askPatient, narrateFeedback } from "@/lib/patient.functions";
 import { getEngineCase } from "@/lib/engine-registry";
 import { TheoStation } from "@/components/theo-station";
 import { THEO_CASE_ID } from "@/lib/case-theo";
+import { MariaStation } from "@/components/maria-station";
+import { PV001 } from "@/lib/pv001/case";
 import {
   clock,
   makeEvent,
@@ -19,9 +21,10 @@ import {
 
 export const Route = createFileRoute("/caso/$id")({
   loader: ({ params }) => {
+    if (params.id === PV001.id) return { clinicalCase: null, maria: true };
     const clinicalCase = getCase(params.id);
     if (!clinicalCase) throw notFound();
-    return { clinicalCase };
+    return { clinicalCase, maria: false };
   },
   head: ({ loaderData }) => {
     const c = loaderData?.clinicalCase;
@@ -46,9 +49,10 @@ export const Route = createFileRoute("/caso/$id")({
 });
 
 function CaseRoute() {
-  const { clinicalCase } = Route.useLoaderData();
+  const { clinicalCase, maria } = Route.useLoaderData();
+  if (maria) return <MariaStation />;
   // Caso canônico do Théo: estação própria, motor determinístico.
-  if (clinicalCase.id === THEO_CASE_ID) return <TheoStation />;
+  if (clinicalCase?.id === THEO_CASE_ID) return <TheoStation />;
   return <Cockpit />;
 }
 
@@ -69,7 +73,7 @@ function statusText(s: VitalStatus) {
 }
 
 function Cockpit() {
-  const { clinicalCase } = Route.useLoaderData();
+  const clinicalCase = Route.useLoaderData().clinicalCase!;
   const engineCase = getEngineCase(clinicalCase.id)!;
   const ask = useServerFn(askPatient);
   const narrate = useServerFn(narrateFeedback);
