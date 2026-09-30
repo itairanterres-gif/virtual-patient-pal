@@ -1,6 +1,7 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText } from "ai";
 import type { Generate } from "./intent";
+import { withoutThinking } from "./model-fetch";
 
 /**
  * OpenAI-compatible provider for the intent classifier and the actor (MiMo by default; base URL, key and
@@ -14,6 +15,7 @@ export function intentGenerator(
     name: "pv001-intent",
     baseURL: cfg.baseURL,
     apiKey: cfg.apiKey,
+    fetch: withoutThinking(cfg.baseURL),
   });
   return async ({ system, prompt, signal }) => {
     const result = await generateText({

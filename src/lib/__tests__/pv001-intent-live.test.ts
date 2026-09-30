@@ -20,14 +20,23 @@ describe.skipIf(!cfg.enabled)("PV-001 v1.2 — real model on the paraphrase corp
       const state = intentStateOf(createSession("live", "live", Date.now()));
       const results = new Map<string, IntentSignals | null>();
       const fallbacks: string[] = [];
+      const times: number[] = [];
       for (const item of ITEMS) {
+        const t = Date.now();
         const r = await classifyIntent({ text: item.text, state }, { generate, model: cfg.model });
+        times.push(Date.now() - t);
         results.set(item.text, r.source === "llm" ? r.signals : null);
         if (r.source === "regex") fallbacks.push(`${item.id}:${r.reason}`);
       }
       const report = evaluateInterpreter((text) => results.get(text) ?? null);
       console.log(renderReport(`Intérprete por IA (${cfg.model})`, report));
       console.log(`Fallbacks: ${fallbacks.length ? fallbacks.join(", ") : "nenhum"}`);
+      const sorted = [...times].sort((a, b) => a - b);
+      const at = (p: number) =>
+        (sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]! / 1000).toFixed(1);
+      console.log(
+        `Tempo por fala: mediana ${at(0.5)} s | 90% até ${at(0.9)} s | máximo ${at(1)} s`,
+      );
       expect(report.total).toBe(ITEMS.length);
     },
     ITEMS.length * 6000,
