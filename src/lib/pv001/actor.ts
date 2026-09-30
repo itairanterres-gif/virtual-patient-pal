@@ -10,7 +10,7 @@ import { LINES, type LineId } from "./case";
 import { normalize, type Emotion, type Session, type Turn } from "./engine";
 import { INTENT_DEFAULTS, type Generate } from "./intent";
 
-export const ACTOR_TIMEOUT_MS = 4500;
+export const ACTOR_TIMEOUT_MS = 7000;
 export const ACTOR_MAX_CHARS = 420;
 
 /** Non-clinical persona the actor may always use. Kept to the case's stated facts. */
@@ -78,6 +78,8 @@ const AFFIRMING =
   /\b(?:tenho|tive|tomo|tomei|uso|usei|faco|fiz|sinto|senti|nunca|sempre|sou alergica|fui operada|fui internada)\b/;
 const META =
   /\b(?:simulac|roteiro|inteligencia artificial|\bia\b|modelo de linguagem|estudante|prompt|personagem|atriz)\b|\bdout(?:or|ora)\b/;
+/** Forms of address that presume the student's gender ("Nossa Senhora" is an exclamation). */
+const GENDERED = /(?<!nossa )\b(?:o senhor|a senhora|moco|moca)\b/;
 const UNDERSTANDING: LineId[] = ["cardio", "renalBenefit", "glucose", "reassured", "understood"];
 
 /** Content each beat must carry, beyond its numbers and clinical terms. */
@@ -142,6 +144,7 @@ export function verifyPerformance(input: {
   if (/[*_#<>{}[\]]|\n\s*\n/.test(text)) return { ok: false, reason: "formatting" };
   const t = normalize(text);
   if (META.test(t)) return { ok: false, reason: "meta" };
+  if (GENDERED.test(t)) return { ok: false, reason: "gendered_address" };
 
   const allowedText = normalize(
     [PERSONA, ...releasedFacts(input.delivered, input.beats)].join(" "),
@@ -307,9 +310,32 @@ export type ActorResult =
 class Timeout extends Error {}
 
 /** Asks the model for a performance and verifies it. Never throws; any doubt keeps the script. */
+const RETRY_HINT: Record<string, string> = {
+  gendered_address:
+    "não use 'o senhor', 'a senhora' nem outra forma que presuma o gênero de quem atende",
+  meta: "não saia do papel nem use doutor/doutora",
+  contradicts_beat: "não volte a perguntar da diálise nesta fala",
+  reopens_resolved_fear: "a preocupação com o rim já foi resolvida; não volte a ela",
+  too_long: "fale menos, no máximo duas frases curtas",
+  formatting: "responda só com a fala, sem formatação",
+};
+function retryHint(reason: string) {
+  if (RETRY_HINT[reason]) return RETRY_HINT[reason];
+  if (reason.startsWith("missing:"))
+    return "a fala precisa transmitir tudo o que está em falas_do_roteiro_deste_turno";
+  if (reason.startsWith("number:"))
+    return "use apenas os números dos fatos liberados, escritos como estão";
+  return "não mencione nenhum dado de saúde, remédio, sintoma, hábito ou promessa de tratamento que não esteja nos fatos liberados; se não souber, diga que não sabe";
+}
+
+/**
+ * Asks the model for a performance and verifies it. One corrected retry is allowed when the
+ * first line is rejected, within the same overall time budget. Never throws; any remaining
+ * doubt keeps the script line.
+ */
 export async function performWithModel(
   req: ActorRequest,
-  deps: { generate: Generate; model: string; timeoutMs?: number },
+  deps: { generate: Generate; model: string; timeoutMs?: number; attempts?: number },
 ): Promise<ActorResult> {
   if (!req.beats.length || req.beats.includes("opening"))
     return { source: "script", reason: "not_performable" };
@@ -321,19 +347,23 @@ export async function performWithModel(
       reject(new Timeout());
     }, deps.timeoutMs ?? ACTOR_TIMEOUT_MS);
   });
+  const attempts = deps.attempts ?? 2;
+  let lastReason = "";
   try {
-    const text = await Promise.race([
-      deps.generate({
-        system: ACTOR_SYSTEM_PROMPT,
-        prompt: buildActorPrompt(req),
-        signal: controller.signal,
-      }),
-      timeout,
-    ]);
-    const check = verifyPerformance({ text, ...req });
-    return check.ok
-      ? { source: "actor", text: check.text, model: deps.model }
-      : { source: "script", reason: `rejected:${check.reason}` };
+    for (let i = 0; i < attempts; i++) {
+      const prompt =
+        i === 0
+          ? buildActorPrompt(req)
+          : `${buildActorPrompt(req)}\nSua fala anterior foi recusada. Corrija: ${retryHint(lastReason)}.`;
+      const text = await Promise.race([
+        deps.generate({ system: ACTOR_SYSTEM_PROMPT, prompt, signal: controller.signal }),
+        timeout,
+      ]);
+      const check = verifyPerformance({ text, ...req });
+      if (check.ok) return { source: "actor", text: check.text, model: deps.model };
+      lastReason = check.reason;
+    }
+    return { source: "script", reason: `rejected:${lastReason}` };
   } catch (e) {
     return { source: "script", reason: e instanceof Timeout ? "timeout" : "error" };
   } finally {

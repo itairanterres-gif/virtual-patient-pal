@@ -97,6 +97,8 @@ describe("PV-001 actor — performance gate", () => {
       check("Esse remédio é um iSGLT2 que protege os rins pela diretriz.", ["renalBenefit"]),
       check("Como sou uma IA, não posso responder.", ["unknown"]),
       check("Estou ouvindo, doutora.", ["listening"]),
+      check("Tá bom. O que a senhora quer que eu faça?", ["listening"]),
+      check("Pode falar, o senhor.", ["listening"]),
       check("**Maria:** Estou ouvindo.", ["listening"]),
       check("x".repeat(500), ["listening"]),
       verifyPerformance({ text: 42, beats: ["listening"], delivered: [], studentText: "" }),
@@ -228,6 +230,17 @@ describe("PV-001 actor — applying and falling back", () => {
     const invent: Generate = async () =>
       "Por que outro remédio? Meu médico disse que minha TFG é 30.";
     expect((await performWithModel(req, { generate: invent, model: "x" })).source).toBe("script");
+    let calls = 0;
+    const fixes: Generate = async ({ prompt }) =>
+      ++calls === 1
+        ? "Por que outro? A senhora acha que precisa?"
+        : prompt.includes("recusada")
+          ? "Mas eu já tomo remédio pra diabetes. Por que outro?"
+          : "x";
+    expect(await performWithModel(req, { generate: fixes, model: "x" })).toMatchObject({
+      source: "actor",
+    });
+    expect(calls).toBe(2);
     const ok: Generate = async () => "Mas eu já tomo remédio pra diabetes. Por que outro?";
     expect(await performWithModel(req, { generate: ok, model: "x" })).toMatchObject({
       source: "actor",
