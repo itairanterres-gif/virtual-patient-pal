@@ -13,6 +13,7 @@ const actorInput = z
     recent: z
       .array(z.object({ role: z.enum(["student", "patient"]), text: z.string().max(4000) }))
       .max(6),
+    pending: z.array(z.enum(["medo_do_rim", "custo_do_remedio"])).max(2),
   })
   .strict();
 

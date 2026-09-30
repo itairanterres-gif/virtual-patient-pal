@@ -105,6 +105,43 @@ describe("PV-001 actor — performance gate", () => {
   });
 });
 
+describe("PV-001 actor — resolved fear", () => {
+  it("does not keep reopening the kidney fear after it was resolved", () => {
+    const base = {
+      beats: ["listening"] as LineId[],
+      delivered: ["opening"] as LineId[],
+      studentText: "",
+    };
+    expect(
+      verifyPerformance({
+        ...base,
+        text: "Tá bom. Mas fico com essa preocupação do rim na cabeça, sabe?",
+        pending: [],
+      }).ok,
+    ).toBe(false);
+    expect(
+      verifyPerformance({
+        ...base,
+        text: "Tá bom. Mas fico com essa preocupação do rim na cabeça, sabe?",
+        pending: ["medo_do_rim"],
+      }).ok,
+    ).toBe(true);
+    expect(verifyPerformance({ ...base, text: "Tá bom, pode continuar.", pending: [] }).ok).toBe(
+      true,
+    );
+  });
+  it("tells the actor which concerns are still open", () => {
+    let s = make();
+    s = respond(
+      s,
+      "Entendo seu medo. O rim ainda funciona; isso não significa diálise agora.",
+      at(s),
+    );
+    expect(actorRequestOf(s, s.transcript.at(-1)!).pending).toEqual([]);
+    expect(actorRequestOf(make(), make().transcript[0]!).pending).toEqual(["medo_do_rim"]);
+  });
+});
+
 describe("PV-001 actor — applying and falling back", () => {
   const withWhy = () => respond(make(), "Vamos adicionar outro remédio.", start + 10000);
 
