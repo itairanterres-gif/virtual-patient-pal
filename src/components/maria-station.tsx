@@ -619,7 +619,10 @@ export function MariaStation() {
             Biblioteca de casos
           </Link>
           <h1 className="mt-2 text-xl font-semibold">{PV001.publicTitle}</h1>
-          <p className="text-sm text-faint">PV-001 · v1.1 · {PV001.environment}</p>
+          <p className="text-sm text-faint">
+            PV-001 · v{s?.case_version ?? PV001.version} · {PV001.environment}
+            {actorOn ? " · paciente-atriz (IA)" : modelIntent ? " · intérprete por IA" : ""}
+          </p>
         </div>
         {s && (
           <div className="text-right">
@@ -1156,7 +1159,9 @@ export function MariaStation() {
           <footer className="flex flex-wrap items-center gap-3">
             <button
               className={button}
-              onClick={() => download(current.current, `PV-001-v1.1-${s.sessionId}.json`)}
+              onClick={() =>
+                download(current.current, `PV-001-v${s.case_version}-${s.sessionId}.json`)
+              }
             >
               Exportar sessão completa
             </button>
