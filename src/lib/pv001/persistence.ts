@@ -1,4 +1,4 @@
-import { PV001 } from "./case";
+import { PV001, SPEC_BY_VERSION, type CaseVersion } from "./case";
 import type { Session } from "./engine";
 import type { Evaluation, Review } from "./evaluator";
 
@@ -37,6 +37,38 @@ export function loadRecord(storage: StoragePort, id: string): RecordEnvelope | n
     );
   }
   return data;
+}
+/**
+ * Opens any known version without migrating it. The current version is resumable; a session
+ * recorded under an earlier known specification (v1.1) opens read-only for export and review,
+ * only if its stored snapshot matches that specification exactly. Unknown versions throw.
+ */
+export function openRecord(
+  storage: StoragePort,
+  id: string,
+): { record: RecordEnvelope; resumable: boolean } | null {
+  const raw = storage.getItem(STORAGE_PREFIX + id);
+  if (!raw) return null;
+  const data = JSON.parse(raw) as RecordEnvelope;
+  const version = data.session?.case_version;
+  if (version === PV001.version) {
+    const record = loadRecord(storage, id);
+    return record ? { record, resumable: true } : null;
+  }
+  const spec = Object.hasOwn(SPEC_BY_VERSION, version)
+    ? SPEC_BY_VERSION[version as CaseVersion]
+    : null;
+  if (
+    !spec ||
+    data.session.case_id !== PV001.id ||
+    JSON.stringify(data.session.caseSnapshot) !== JSON.stringify(spec) ||
+    !Array.isArray(data.session.transcript)
+  ) {
+    throw new Error(
+      "Versão incompatível: sessão preservada para exportação; não pode ser retomada por este motor.",
+    );
+  }
+  return { record: data, resumable: false };
 }
 export function sessionIndex(storage: StoragePort) {
   const entries: { id: string; version: string; at: string; student: string }[] = [];

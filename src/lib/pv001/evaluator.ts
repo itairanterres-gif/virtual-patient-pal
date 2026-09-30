@@ -1,6 +1,7 @@
 import type { Session } from "./engine";
 
-export const CHECKLIST = [
+/** v1.1 criteria, kept unchanged to review sessions recorded under v1.1. */
+export const CHECKLIST_V11 = [
   [
     "vinculo",
     "Estabelece vínculo e identifica a principal preocupação da paciente, o medo em relação ao rim, antes de avançar para a conduta.",
@@ -35,6 +36,25 @@ export const CHECKLIST = [
   ["medo", "Aborda adequadamente o medo de progressão renal/diálise, sem alarmismo."],
   ["plano", "Apresenta plano final coerente e compreensível."],
 ] as const;
+
+/**
+ * v1.2: only the access criterion changes, with the author's answer key (PCDT de DRC/CEAF).
+ * Order and ids are preserved so reviews stay comparable across versions.
+ */
+export const CHECKLIST_V12 = CHECKLIST_V11.map(([id, text]) =>
+  id === "acesso"
+    ? ([
+        id,
+        "Identifica a via de acesso gratuito ao iSGLT2 no SUS (PCDT de DRC/CEAF) e orienta a paciente sobre documentação e local de retirada, construindo um plano factível.",
+      ] as const)
+    : ([id, text] as const),
+);
+/** Current version's checklist. */
+export const CHECKLIST = CHECKLIST_V12;
+export type Criterion = readonly [id: string, text: string];
+export function checklistFor(version: string): readonly Criterion[] {
+  return version === "1.1" ? CHECKLIST_V11 : CHECKLIST_V12;
+}
 export type Status = "NR" | "I" | "PA" | "A";
 export type Evidence = { turn: number; student_text: string };
 export type Judgment = {
@@ -69,7 +89,7 @@ export function validEvidence(s: Session, e: Evidence) {
 export function validateEvaluation(s: Session, raw: Judgment[], available = true): Evaluation {
   if (s.mode === "patient_mode") throw new Error("Avaliação indisponível durante a cena.");
   const rejected: string[] = [];
-  const items = CHECKLIST.map(([id]) => {
+  const items = checklistFor(s.case_version).map(([id]) => {
     const matches = raw.filter((j) => j.criterion === id);
     const j = matches.length === 1 ? matches[0] : undefined;
     const evidence = j?.evidence.filter((e) => validEvidence(s, e)) ?? [];
@@ -106,7 +126,8 @@ export function validateEvaluation(s: Session, raw: Judgment[], available = true
 export function validateReview(s: Session, review: Review): Review {
   if (!review.reviewer.trim() || !review.note.trim())
     throw new Error("Informe revisor e justificativa.");
-  if (review.items.length !== CHECKLIST.length) throw new Error("Revisão incompleta.");
+  if (review.items.length !== checklistFor(s.case_version).length)
+    throw new Error("Revisão incompleta.");
   const validated = validateEvaluation(s, review.items);
   if (validated.rejected.length)
     throw new Error("Classificações exigem trechos reais da consulta.");

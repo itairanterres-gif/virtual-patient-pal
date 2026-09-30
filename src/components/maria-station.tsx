@@ -11,12 +11,15 @@ import {
   recordDecision,
   reflect,
   respond,
+  type IntentInput,
   type Session,
 } from "@/lib/pv001/engine";
-import { CHECKLIST, validateReview, type Judgment, type Status } from "@/lib/pv001/evaluator";
+import { checklistFor, validateReview, type Judgment, type Status } from "@/lib/pv001/evaluator";
+import { INTENT_TIMEOUT_MS, intentStateOf } from "@/lib/pv001/intent";
+import { intentCapabilities, interpretIntent } from "@/lib/pv001/intent.functions";
 import { evaluateMaria } from "@/lib/pv001/evaluation.functions";
 import {
-  loadRecord,
+  openRecord,
   saveRecord,
   sessionIndex,
   STORAGE_PREFIX,
@@ -80,6 +83,8 @@ export function MariaStation() {
   const [transcribing, setTranscribing] = useState(false);
   const [voiceTestText, setVoiceTestText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [interpreting, setInterpreting] = useState(false);
+  const [modelIntent, setModelIntent] = useState(false);
   const [reflection, setReflection] = useState("");
   const [debrief, setDebrief] = useState("");
   const [reviewer, setReviewer] = useState("");
@@ -97,6 +102,8 @@ export function MariaStation() {
   const capabilities = useServerFn(audioCapabilities);
   const renderSpeech = useServerFn(renderMariaSpeech);
   const transcribe = useServerFn(transcribeStudent);
+  const interpret = useServerFn(interpretIntent);
+  const intentCaps = useServerFn(intentCapabilities);
 
   const commit = useCallback((next: RecordEnvelope) => {
     // Ref is updated synchronously: timer, speech and text always use the same latest state.
@@ -152,7 +159,12 @@ export function MariaStation() {
     }
     const timer = window.setInterval(() => {
       const value = current.current;
-      if (!value || value.session.mode !== "patient_mode") return;
+      if (
+        !value ||
+        value.session.mode !== "patient_mode" ||
+        value.session.case_version !== PV001.version
+      )
+        return;
       const next = advance(value.session);
       if (next !== value.session) {
         if (next.mode !== "patient_mode") stopVoice();
@@ -196,6 +208,15 @@ export function MariaStation() {
     };
   }, [capabilities]);
   useEffect(() => {
+    let mounted = true;
+    void intentCaps()
+      .then((value) => mounted && setModelIntent(value.enabled))
+      .catch(() => mounted && setModelIntent(false));
+    return () => {
+      mounted = false;
+    };
+  }, [intentCaps]);
+  useEffect(() => {
     chat.current?.scrollTo({ top: chat.current.scrollHeight, behavior: "smooth" });
   }, [record?.session.transcript.length]);
 
@@ -233,14 +254,42 @@ export function MariaStation() {
       if (generation === voiceGeneration.current) failed();
     }
   }
-  function send(text = input) {
+  async function detectIntent(session: Session, text: string): Promise<IntentInput> {
+    if (!modelIntent) return { source: "regex", reason: "disabled" };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // Server enforces its own 4 s limit; this guards the network round trip as well.
+      const result = await Promise.race([
+        interpret({ data: { text, state: intentStateOf(session) } }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("timeout")), INTENT_TIMEOUT_MS + 1500);
+        }),
+      ]);
+      return result.source === "llm"
+        ? { source: "llm", signals: result.signals, model: result.model }
+        : { source: "regex", reason: result.reason };
+    } catch (e) {
+      return { source: "regex", reason: (e as Error).message === "timeout" ? "timeout" : "error" };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  async function send(text = input) {
     const value = current.current;
-    if (!value || !text.trim()) return;
+    if (!value || !text.trim() || interpreting) return;
+    if (value.session.case_version !== PV001.version) return;
     stopVoice();
     setInput("");
+    // The clock uses the moment of sending, not the moment the interpreter answered.
+    const submittedAt = Date.now();
+    setInterpreting(true);
+    const intent = await detectIntent(value.session, text);
+    setInterpreting(false);
+    const latest = current.current;
+    if (!latest || latest.session.sessionId !== value.session.sessionId) return;
     try {
-      const next = respond(value.session, text);
-      commit({ ...value, session: next });
+      const next = respond(latest.session, text, submittedAt, intent);
+      commit({ ...latest, session: next });
       const last = next.transcript.at(-1);
       if (voice && next.mode === "patient_mode" && last?.role === "patient")
         void sayPatient(last, next.emotion);
@@ -286,7 +335,7 @@ export function MariaStation() {
             ? "Fala transcrita e enviada. Você pode iniciar a próxima fala."
             : "Nenhuma fala reconhecida. Tente novamente.",
         );
-        if (text) send(text);
+        if (text) void send(text);
       }
     };
     setMicPending(true);
@@ -432,7 +481,9 @@ export function MariaStation() {
     }
   }
   const s = record?.session;
-  const active = s?.mode === "patient_mode";
+  const legacy = !!s && s.case_version !== PV001.version;
+  const active = s?.mode === "patient_mode" && !legacy;
+  const checklist = checklistFor(s?.case_version ?? PV001.version);
   const audioSettings = (
     <section className={`${box} space-y-3`} aria-label="Áudio e microfone">
       <h2 className="font-semibold">Áudio e microfone</h2>
@@ -590,10 +641,20 @@ export function MariaStation() {
                       className={button}
                       onClick={() => {
                         try {
-                          const value = loadRecord(localStorage, item.id);
-                          if (value) {
-                            commit({ ...value, session: advance(value.session) });
+                          const opened = openRecord(localStorage, item.id);
+                          if (opened) {
+                            const value = opened.record;
+                            // Earlier versions open read-only: never re-run under this engine.
+                            commit(
+                              opened.resumable
+                                ? { ...value, session: advance(value.session) }
+                                : value,
+                            );
                             setReviewItems(value.evaluation?.items ?? []);
+                            if (!opened.resumable)
+                              setNotice(
+                                `Sessão da versão ${value.session.case_version}: aberta para leitura, exportação e revisão. A consulta não pode ser continuada nesta versão.`,
+                              );
                           }
                         } catch (e) {
                           setError((e as Error).message);
@@ -779,10 +840,10 @@ export function MariaStation() {
                   </p>
                   <button
                     className={button}
-                    disabled={!input.trim() || listening}
-                    onClick={() => send()}
+                    disabled={!input.trim() || listening || interpreting}
+                    onClick={() => void send()}
                   >
-                    Enviar fala
+                    {interpreting ? "Interpretando…" : "Enviar fala"}
                   </button>
                   <details>
                     <summary>Registrar decisão ou solicitação adicional</summary>
@@ -903,7 +964,7 @@ export function MariaStation() {
                   className={button}
                   onClick={() =>
                     setReviewItems(
-                      CHECKLIST.map(([criterion]) => ({
+                      checklist.map(([criterion]) => ({
                         criterion,
                         status: "NR",
                         evidence: [],
@@ -936,7 +997,7 @@ export function MariaStation() {
                 )}
                 {reviewItems.map((j, i) => (
                   <div key={j.criterion} className="space-y-2 border-t border-line pt-3">
-                    <p>{CHECKLIST.find(([id]) => id === j.criterion)?.[1]}</p>
+                    <p>{checklist.find(([id]) => id === j.criterion)?.[1]}</p>
                     <select
                       aria-label={`Status ${j.criterion}`}
                       className={field}

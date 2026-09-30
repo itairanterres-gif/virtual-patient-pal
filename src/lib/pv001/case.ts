@@ -1,4 +1,4 @@
-/** PV-001 v1.1. Instructor-authored truth; never merge student/model data into it. */
+/** PV-001 v1.2. Instructor-authored truth; never merge student/model data into it. */
 function freeze<T>(value: T): Readonly<T> {
   if (value && typeof value === "object") {
     Object.values(value).forEach(freeze);
@@ -7,7 +7,12 @@ function freeze<T>(value: T): Readonly<T> {
   return value;
 }
 
-export const PV001 = freeze({
+/**
+ * v1.1 content, kept byte-for-byte so that v1.1 sessions (which store a snapshot) remain
+ * readable. v1.2 changes only version, engineVersion and one prebriefing sentence; clinical
+ * truth, resources and patient lines are identical.
+ */
+const V11 = {
   id: "PV-001",
   version: "1.1",
   engineVersion: "1.1.0",
@@ -74,7 +79,27 @@ export const PV001 = freeze({
     "Qual princípio desta consulta você leva para o próximo paciente com diabetes que atender na UBS?",
     "Se esta fosse sua paciente na atenção primária, o que você organizaria para o seguimento dela?",
   ],
+};
+
+/** Frozen v1.1 specification: read-only reference for sessions recorded under it. */
+export const PV001_V11 = freeze(structuredClone(V11));
+
+export const PV001 = freeze({
+  ...structuredClone(V11),
+  version: "1.2",
+  engineVersion: "1.2.0",
+  prebriefing: [
+    ...V11.prebriefing,
+    "Suas falas podem ser processadas por um serviço externo de IA apenas para interpretar o que você perguntou. As respostas da paciente vêm sempre de um roteiro fixo, escrito pelo autor do caso.",
+  ],
 });
+
+export type CaseVersion = "1.1" | "1.2";
+/** Specification each recorded version was run under. */
+export const SPEC_BY_VERSION: Readonly<Record<CaseVersion, unknown>> = {
+  "1.1": PV001_V11,
+  "1.2": PV001,
+};
 
 // Complete approved patient vocabulary. No clinical free text can be emitted.
 export const LINES = freeze({

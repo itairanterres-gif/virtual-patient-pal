@@ -1,4 +1,4 @@
-import { LINES, PV001, type LineId } from "./case";
+import { LINES, PV001, type CaseVersion, type LineId } from "./case";
 
 export type Emotion = "anxious" | "reassured" | "collaborative" | "withdrawn";
 export type Mode = "patient_mode" | "reflection_mode" | "debriefing_mode";
@@ -14,7 +14,7 @@ export type Session = {
   schemaVersion: 1;
   sessionId: string;
   case_id: "PV-001";
-  case_version: "1.1";
+  case_version: CaseVersion;
   caseSnapshot: typeof PV001;
   student: string;
   startedAt: string;
@@ -78,7 +78,7 @@ export function createSession(student: string, sessionId: string, now = Date.now
     schemaVersion: 1,
     sessionId,
     case_id: "PV-001",
-    case_version: "1.1",
+    case_version: PV001.version as CaseVersion,
     caseSnapshot: PV001,
     student: student.trim(),
     startedAt: new Date(now).toISOString(),
@@ -234,9 +234,107 @@ export function signals(raw: string) {
   };
 }
 
+/** Anamnesis lines that a detected question may release. Any other id is rejected. */
+export const HISTORY_LINE_IDS = [
+  "identity",
+  "occupation",
+  "household",
+  "diabetes",
+  "conditions",
+  "medications",
+  "diet",
+  "exercise",
+  "chest",
+  "breathing",
+  "swelling",
+  "vision",
+] as const satisfies readonly LineId[];
+export type HistoryLineId = (typeof HISTORY_LINE_IDS)[number];
+
+/** Detection flags. The interpreter (regex or model) only fills these; it never writes speech. */
+export const INTENT_FLAGS = [
+  "acknowledges",
+  "renalExplanation",
+  "alarming",
+  "insulin",
+  "adjustment",
+  "newMedication",
+  "cardio",
+  "renalBenefit",
+  "glucoseOnly",
+  "access",
+  "injection",
+  "technical",
+  "questionLike",
+] as const;
+export type IntentFlag = (typeof INTENT_FLAGS)[number];
+export type IntentSignals = Record<IntentFlag, boolean> & { historyRequests: HistoryLineId[] };
+export type IntentSource = "regex" | "llm";
+/** What the station hands to respond(): a model detection, or the reason it fell back. */
+export type IntentInput =
+  { source: "llm"; signals: unknown; model?: string } | { source: "regex"; reason: string };
+
+const TECHNICAL =
+  /diretriz|sbd|ensine|me ensina|qual.*(?:meta|tratamento|remedio|risco)|mecanismo|a2|glp.?1|sglt2/;
+const QUESTION = /\?|\b(?:qual|quais|quanto|quando|quem)\b|me conte|me fale|^como\b/;
+
+/** The deterministic interpreter used by v1.1, expressed in the shared signal format. */
+export function regexIntent(raw: string): IntentSignals {
+  const { q, ...x } = signals(raw);
+  const history = historyRequests(q);
+  return {
+    ...x,
+    technical: TECHNICAL.test(q),
+    questionLike: history.length > 0 || QUESTION.test(q),
+    historyRequests: history,
+  };
+}
+
+/**
+ * Accepts only the exact signal shape: every flag strictly boolean, history ids from the
+ * allow-list, no extra keys. Anything else is treated as invalid model output.
+ */
+export function sanitizeIntent(value: unknown): IntentSignals | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const allowed = new Set<string>([...INTENT_FLAGS, "historyRequests"]);
+  if (Object.keys(v).some((key) => !allowed.has(key))) return null;
+  if (INTENT_FLAGS.some((flag) => typeof v[flag] !== "boolean")) return null;
+  const history = v["historyRequests"];
+  if (!Array.isArray(history) || history.length > HISTORY_LINE_IDS.length) return null;
+  if (history.some((id) => !(HISTORY_LINE_IDS as readonly unknown[]).includes(id))) return null;
+  const out = Object.fromEntries(INTENT_FLAGS.map((flag) => [flag, v[flag] === true])) as Record<
+    IntentFlag,
+    boolean
+  >;
+  return { ...out, historyRequests: [...new Set(history as HistoryLineId[])] };
+}
+
+/**
+ * Model detection with safety floors from the regex: an injection or alarming phrase caught by
+ * either interpreter counts. Internal consistency mirrors the deterministic rules.
+ */
+export function mergeIntent(regex: IntentSignals, model: IntentSignals): IntentSignals {
+  const alarming = model.alarming || regex.alarming;
+  const renalBenefit = model.renalBenefit && !alarming;
+  const cardio = model.cardio && !alarming;
+  const adjustment = model.adjustment;
+  return {
+    ...model,
+    injection: model.injection || regex.injection,
+    alarming,
+    renalBenefit,
+    cardio,
+    renalExplanation: (model.renalExplanation || renalBenefit) && !alarming,
+    glucoseOnly: model.glucoseOnly && !cardio && !renalBenefit,
+    newMedication: model.newMedication && adjustment,
+    questionLike: model.questionLike || model.historyRequests.length > 0,
+  };
+}
+
 /** Requests need an interrogative/eliciting phrase near the topic, not just "senhora". */
-function historyRequests(q: string): LineId[] {
-  const requests: [LineId, RegExp][] = [
+function historyRequests(q: string): HistoryLineId[] {
+  const requests: [HistoryLineId, RegExp][] = [
     ["identity", /qual.{0,20}(?:nome|idade)|quantos anos (?:a senhora |voce )?tem/],
     [
       "occupation",
@@ -275,7 +373,14 @@ function historyRequests(q: string): LineId[] {
 }
 
 /** Every response is assembled here from whole approved lines, never model prose. */
-export function respond(s0: Session, raw: string, now = Date.now()): Session {
+export function respond(
+  s0: Session,
+  raw: string,
+  now = Date.now(),
+  intent: IntentInput = { source: "regex", reason: "local" },
+): Session {
+  if (s0.case_version !== PV001.version)
+    throw new Error("Sessão de versão anterior: somente leitura, exportação e revisão.");
   const advanced = advance(s0, now);
   if (advanced.mode !== "patient_mode" || !raw.trim()) return advanced;
   if (raw.length > 4000) throw new Error("Limite de 4000 caracteres por fala.");
@@ -283,8 +388,19 @@ export function respond(s0: Session, raw: string, now = Date.now()): Session {
   emit(s, "student", raw.trim());
   const turn = s.transcript.length;
   s.clinicalQuestions.push({ turn, text: raw.trim() });
-  const x = signals(raw),
-    f = s.flags;
+  // The interpreter only detects. Lines are still chosen below, from LINES, by this engine.
+  const regex = regexIntent(raw);
+  const detected = intent.source === "llm" ? sanitizeIntent(intent.signals) : null;
+  const x = detected ? mergeIntent(regex, detected) : regex;
+  s.technicalEvents.push({
+    atSec: s.elapsedSec,
+    type: "intent_interpreter",
+    detail: detected
+      ? `llm${intent.source === "llm" && intent.model ? `:${intent.model}` : ""}`
+      : `regex:${intent.source === "llm" ? "invalid_output" : intent.reason}`,
+    turn,
+  });
+  const f = s.flags;
   if (x.injection) {
     patient(s, ["unknown"]);
     event(s, "truth_lock", "Instrução incompatível bloqueada");
@@ -359,22 +475,17 @@ export function respond(s0: Session, raw: string, now = Date.now()): Session {
     reply.push("insulin");
     event(s, "insulin", "Preocupação leve; sem ramo de resistência");
   }
-  const q = x.q;
-  const requestedHistory = historyRequests(q);
-  const questionLike =
-    requestedHistory.length > 0 ||
-    /\?|\b(?:qual|quais|quanto|quando|quem)\b|me conte|me fale|^como\b/.test(q);
+  const requestedHistory = x.historyRequests.filter((id) =>
+    (HISTORY_LINE_IDS as readonly string[]).includes(id),
+  );
+  const questionLike = x.questionLike || requestedHistory.length > 0;
   reply.push(...requestedHistory);
   if (reply.length === 0 && x.renalBenefit && reasonPreviouslyExplained) {
     reply.push(f.costAsked && !f.costAddressed ? "accessPending" : "understood");
   }
   if (reply.length === 0) {
-    const technical =
-      /diretriz|sbd|ensine|me ensina|qual.*(?:meta|tratamento|remedio|risco)|mecanismo|a2|glp.?1|sglt2/.test(
-        q,
-      );
     reply.push(
-      technical
+      x.technical
         ? "layperson"
         : s.emotion === "withdrawn"
           ? "closed"
