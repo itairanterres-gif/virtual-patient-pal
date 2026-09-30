@@ -486,7 +486,11 @@ export function respond(
   const questionLike = x.questionLike || requestedHistory.length > 0;
   reply.push(...requestedHistory);
   if (reply.length === 0 && x.renalBenefit && reasonPreviouslyExplained) {
-    reply.push(f.costAsked && !f.costAddressed ? "accessPending" : "understood");
+    const pendingCost = f.costAsked && !f.costAddressed;
+    // "Pode me explicar como vai ser?" is asked once; repeating it after an explanation loops.
+    const askedHow = s.transcript.some((t) => t.lineIds.includes("understood"));
+    if (pendingCost) reply.push("accessPending");
+    else if (!askedHow) reply.push("understood");
   }
   if (reply.length === 0) {
     reply.push(

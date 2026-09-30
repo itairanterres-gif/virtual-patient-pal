@@ -231,4 +231,18 @@ describe("PV-001 v1.1 — phase 1/2 patient gate", () => {
     expect(reflect(s, " ").mode).toBe("reflection_mode");
     expect(reflect(s, "Eu acolheria mais cedo.").mode).toBe("debriefing_mode");
   });
+  it("asks how the new treatment will work only once", () => {
+    let s = make();
+    for (const text of [
+      "Entendo seu medo. O rim ainda funciona; isso não significa diálise agora.",
+      "Vamos adicionar outro remédio.",
+      "Ele protege os rins.",
+      "Vamos verificar a disponibilidade no SUS e decidir juntas.",
+      "Ele ajuda a proteger os rins.",
+      "É para proteger os rins, a senhora toma um por dia.",
+    ])
+      s = say(s, text);
+    const asked = s.transcript.filter((t) => t.lineIds.includes("understood")).length;
+    expect(asked).toBeLessThanOrEqual(1);
+  });
 });
