@@ -8,6 +8,11 @@ export type Turn = {
   text: string;
   atSec: number;
   lineIds: LineId[];
+  /**
+   * Actor mode only: `text` is the verified natural performance and `script` the exact approved
+   * lines it conveys; or the reason the script line was kept.
+   */
+  performance?: { by: "actor"; model: string; script: string } | { by: "script"; reason: string };
 };
 export type Event = { atSec: number; type: string; detail: string; turn: number | null };
 export type Session = {

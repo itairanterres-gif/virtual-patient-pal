@@ -139,6 +139,21 @@ PV001_INTENT_BASE_URL=https://api.xiaomimimo.com/v1   # opcional; qualquer API c
 - A paciente reage igual a uma orientação de acesso correta ou errada; a correção depende do avaliador e do debriefing.
 - Os exemplos em `test-sessions.*` são da v1.1 e não foram regenerados.
 
+## Modo atriz (ramo `claude/pv001-maria-atriz`, experimental)
+
+Decisão do autor (30/09/2026): o roteiro fixo, mesmo com o intérprete por IA, mantém a Maria robótica. Adotado o modelo da paciente-atriz: **o motor dirige o roteiro, a IA dá naturalidade**.
+
+- **Diretor (motor, inalterado):** decide as batidas de cada turno (`lineIds`), o estado emocional e as transições. Os três momentos continuam dependendo da detecção, agora opcionalmente por IA.
+- **Atriz (`src/lib/pv001/actor.ts`, `actor.functions.ts`):** recebe a persona não clínica, a emoção, as batidas do turno e **somente os fatos já liberados** (falas do roteiro entregues até então), montados no servidor a partir de `LINES`. Responde conversa social e sentimentos, volta à preocupação pendente e não recebe gabarito, checklist nem exames.
+- **Conferência (`verifyPerformance`):** números só dos fatos liberados; vocabulário clínico (remédios, doenças, sintomas, exames, hábitos, adesão, alergias, cirurgias) só se estiver nos fatos, ou em eco da fala do estudante em batidas de compreensão, ou em "não sei" sem afirmação; cada batida precisa carregar seus números, termos e palavras-chave; sem metalinguagem, formatação ou "doutor(a)". Reprovou, expirou ou deu erro → a frase exata do roteiro. A conferência roda no servidor e de novo ao aplicar.
+- **Registro:** o turno guarda `performance` (`actor` + modelo + texto exato do roteiro, ou `script` + motivo) e um evento `patient_voice`. A abertura continua sendo a fala gravada.
+- **Voz:** a voz paga só sintetiza falas aprovadas por id; uma fala da atriz é lida pela voz do navegador.
+- Ativação: `PV001_LLM_ACTOR=true` (mesma chave; modelo em `PV001_ACTOR_MODEL`, opcional). Desligado por padrão.
+
+**Comparação:** `bun docs/pv001/actor-compare.ts` roda a mesma consulta nas duas versões e grava `actor-compare.md`. Sem chave, só a coluna do roteiro. Essa coluna já mostra o problema atual: a Maria responde "Isso eu não sei dizer" a "tudo bem com a senhora?" e "Estou ouvindo" à proposta de novo remédio ("incluir mais um comprimido" não é reconhecido), de modo que os três momentos centrais nem acontecem.
+
+**Limites:** a conferência é deliberadamente conservadora e pode descartar falas boas; não consegue provar a ausência de todo detalhe não clínico inventado (por exemplo, sobre a rotina), por isso a transcrição guarda o roteiro ao lado para revisão humana. Latência: até ~4 s do intérprete + ~4,5 s da atriz por turno. Nada foi testado com modelo real.
+
 ## Referências técnicas consultadas
 
 - [SpeechRecognition — MDN](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition): disponibilidade limitada e possibilidade de reconhecimento no servidor do navegador.

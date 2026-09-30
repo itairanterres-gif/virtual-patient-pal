@@ -16,6 +16,14 @@ import {
 } from "@/lib/pv001/engine";
 import { checklistFor, validateReview, type Judgment, type Status } from "@/lib/pv001/evaluator";
 import { INTENT_TIMEOUT_MS, intentStateOf } from "@/lib/pv001/intent";
+import {
+  ACTOR_TIMEOUT_MS,
+  actorRequestOf,
+  perform,
+  performable,
+  type ActorResult,
+} from "@/lib/pv001/actor";
+import { actorCapabilities, performMaria } from "@/lib/pv001/actor.functions";
 import { intentCapabilities, interpretIntent } from "@/lib/pv001/intent.functions";
 import { evaluateMaria } from "@/lib/pv001/evaluation.functions";
 import {
@@ -85,6 +93,8 @@ export function MariaStation() {
   const [busy, setBusy] = useState(false);
   const [interpreting, setInterpreting] = useState(false);
   const [modelIntent, setModelIntent] = useState(false);
+  const [actorOn, setActorOn] = useState(false);
+  const [performing, setPerforming] = useState<number | null>(null);
   const [reflection, setReflection] = useState("");
   const [debrief, setDebrief] = useState("");
   const [reviewer, setReviewer] = useState("");
@@ -104,6 +114,8 @@ export function MariaStation() {
   const transcribe = useServerFn(transcribeStudent);
   const interpret = useServerFn(interpretIntent);
   const intentCaps = useServerFn(intentCapabilities);
+  const performer = useServerFn(performMaria);
+  const actorCaps = useServerFn(actorCapabilities);
 
   const commit = useCallback((next: RecordEnvelope) => {
     // Ref is updated synchronously: timer, speech and text always use the same latest state.
@@ -212,10 +224,13 @@ export function MariaStation() {
     void intentCaps()
       .then((value) => mounted && setModelIntent(value.enabled))
       .catch(() => mounted && setModelIntent(false));
+    void actorCaps()
+      .then((value) => mounted && setActorOn(value.enabled))
+      .catch(() => mounted && setActorOn(false));
     return () => {
       mounted = false;
     };
-  }, [intentCaps]);
+  }, [intentCaps, actorCaps]);
   useEffect(() => {
     chat.current?.scrollTo({ top: chat.current.scrollHeight, behavior: "smooth" });
   }, [record?.session.transcript.length]);
@@ -238,7 +253,8 @@ export function MariaStation() {
       );
       technical("speech_error", "Reprodução indisponível");
     };
-    if (!naturalVoice) {
+    // Paid TTS only accepts approved line ids; an actor performance is read by the browser voice.
+    if (!naturalVoice || turn.performance?.by === "actor") {
       speak(turn.text, failed, voiceURI);
       return;
     }
@@ -276,7 +292,7 @@ export function MariaStation() {
   }
   async function send(text = input) {
     const value = current.current;
-    if (!value || !text.trim() || interpreting) return;
+    if (!value || !text.trim() || interpreting || performing !== null) return;
     if (value.session.case_version !== PV001.version) return;
     stopVoice();
     setInput("");
@@ -291,10 +307,42 @@ export function MariaStation() {
       const next = respond(latest.session, text, submittedAt, intent);
       commit({ ...latest, session: next });
       const last = next.transcript.at(-1);
-      if (voice && next.mode === "patient_mode" && last?.role === "patient")
-        void sayPatient(last, next.emotion);
+      if (!last || last.role !== "patient" || next.mode !== "patient_mode") return;
+      if (!actorOn || !performable(last)) {
+        if (voice) void sayPatient(last, next.emotion);
+        return;
+      }
+      setPerforming(last.turn);
+      const result = await performTurn(next, last);
+      setPerforming(null);
+      const now = current.current;
+      if (!now || now.session.sessionId !== next.sessionId) return;
+      const performed = perform(now.session, last.turn, result);
+      commit({ ...now, session: performed });
+      const shown = performed.transcript.find((t) => t.turn === last.turn);
+      if (voice && shown && performed.mode === "patient_mode")
+        void sayPatient(shown, performed.emotion);
     } catch (e) {
+      setPerforming(null);
       setError((e as Error).message);
+    }
+  }
+  async function performTurn(
+    session: Session,
+    turn: Session["transcript"][number],
+  ): Promise<ActorResult> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        performer({ data: actorRequestOf(session, turn) }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("timeout")), ACTOR_TIMEOUT_MS + 1500);
+        }),
+      ]);
+    } catch (e) {
+      return { source: "script", reason: (e as Error).message === "timeout" ? "timeout" : "error" };
+    } finally {
+      clearTimeout(timer);
     }
   }
   async function listen(testOnly = false) {
@@ -768,7 +816,7 @@ export function MariaStation() {
                           : "Sistema"}{" "}
                       · {clock(turn.atSec)} · turno {turn.turn}
                     </p>
-                    <p>{turn.text}</p>
+                    <p>{performing === turn.turn ? "Maria está respondendo…" : turn.text}</p>
                   </article>
                 ))}
               </div>
@@ -840,7 +888,7 @@ export function MariaStation() {
                   </p>
                   <button
                     className={button}
-                    disabled={!input.trim() || listening || interpreting}
+                    disabled={!input.trim() || listening || interpreting || performing !== null}
                     onClick={() => void send()}
                   >
                     {interpreting ? "Interpretando…" : "Enviar fala"}

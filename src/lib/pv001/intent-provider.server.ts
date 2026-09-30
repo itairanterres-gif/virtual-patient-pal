@@ -1,12 +1,15 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText } from "ai";
-import type { Generate, IntentConfig } from "./intent";
+import type { Generate } from "./intent";
 
 /**
- * OpenAI-compatible provider for the intent classifier (MiMo by default; base URL, key and
+ * OpenAI-compatible provider for the intent classifier and the actor (MiMo by default; base URL, key and
  * model come from server environment variables). Separate from the shared ai-gateway.
  */
-export function intentGenerator(cfg: Extract<IntentConfig, { enabled: true }>): Generate {
+export function intentGenerator(
+  cfg: { apiKey: string; baseURL: string; model: string },
+  temperature = 0,
+): Generate {
   const provider = createOpenAICompatible({
     name: "pv001-intent",
     baseURL: cfg.baseURL,
@@ -17,7 +20,7 @@ export function intentGenerator(cfg: Extract<IntentConfig, { enabled: true }>): 
       model: provider(cfg.model),
       system,
       prompt,
-      temperature: 0,
+      temperature,
       maxRetries: 0,
       abortSignal: signal,
     });
