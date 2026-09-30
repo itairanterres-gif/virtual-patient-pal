@@ -81,6 +81,11 @@ describe("PV-001 actor — performance gate", () => {
       check("Tenho dor no peito às vezes.", ["chest"], "Sente dor no peito?"),
       check("Ah, então é pro coração, não é só pelo açúcar.", ["cardio"], "Não é só pelo açúcar."),
       check("Às vezes sinto falta de ar quando subo escada.", ["unknown"], "Como a senhora está?"),
+      check(
+        "Fico mais tranquila com essa explicação. Mas vou acabar fazendo diálise?",
+        ["reassured"],
+        "Ficou alguma dúvida?",
+      ),
     ];
     for (const r of rejected) expect(r.ok, JSON.stringify(r)).toBe(false);
   });

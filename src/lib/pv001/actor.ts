@@ -173,6 +173,16 @@ export function verifyPerformance(input: {
     for (const re of REQUIRED[beat] ?? [])
       if (!re.test(t)) return { ok: false, reason: `missing:${beat}` };
   }
+  // A calmer beat must not reopen the fear it just closed.
+  const calming: LineId[] = [
+    "reassured",
+    "closeGood",
+    "accessUnderstood",
+    "renalBenefit",
+    "cardio",
+  ];
+  if (input.beats.some((b) => calming.includes(b)) && /dialise\s*\?|vou acabar/.test(t))
+    return { ok: false, reason: "contradicts_beat" };
   if (input.beats.some((b) => b === "remember") && !NOT_KNOWING.test(t))
     return { ok: false, reason: "missing:remember" };
   return { ok: true, text };
